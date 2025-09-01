@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Surf Lime • Fullscreen</title>
+  <style>
+    :root { --bg:#0b1320; --ink:#e8f1ff; --accent:#46e38a; }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:#0b1320;color:var(--ink);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    canvas{ position:fixed; inset:0; width:100vw; height:100vh; display:block; background:#0a2846; }
+    .icon-row{ position:fixed; top:12px; right:12px; z-index:20; display:flex; gap:10px; }
+    .icon-btn{ display:inline-flex; align-items:center; justify-content:center; min-width:40px; height:40px; padding:0 10px; border-radius:12px; border:1px solid #ffffff22; background:#0f233caa; backdrop-filter:blur(6px); cursor:pointer; color:#fff; text-decoration:none; font-weight:600; letter-spacing:.2px; }
+    .icon-btn:hover{ background:#122c4bee }
+    .icon-btn svg{ width:20px; height:20px }
+    .toast{ position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#071427cc; border:1px solid #ffffff2a; border-radius:12px; padding:10px 14px; display:none; z-index:30; color:#eaf2ff; }
+  </style>
+</head>
+<body>
+  <canvas id="game" width="1024" height="576"></canvas>
+  <div class="icon-row">
+    <a class="icon-btn" href="settings.html" title="Settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0A1.65 1.65 0 0 0 9 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82h0A1.65 1.65 0 0 0 20.91 11H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </a>
+    
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <!-- Load config first -->
+  <script src="config.js"></script>
+
+<script>
+(()=>{
+  // ===== Default to 1-Player on first load of a browser session =====
+  try {
+    if (!sessionStorage.getItem('SL_INIT_2P')) {
+      localStorage.setItem('twoPlayerEnabled','false');
+      sessionStorage.setItem('SL_INIT_2P','1');
+    }
+  } catch {}
+
+  const world = { time: 0, seaLevel: 0 };
+
+  // Canvas & DPR
+  const canvas=document.getElementById('game'); const ctx=canvas.getContext('2d');
+  let vw = canvas.width, vh = canvas.height, dpr=1;
+  function resizeDPR(){
+    const rect = canvas.getBoundingClientRect();
+    vw = Math.max(1, Math.round(rect.width));
+    vh = Math.max(1, Math.round(rect.height));
+    dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.round(vw * dpr);
+    canvas.height = Math.round(vh * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    world.seaLevel = vh * 0.58;
+  }
+  addEventListener('resize', resizeDPR);
+  addEventListener('focus', ()=>{ applyPlayerSelections(); showToast(twoPlayerEnabled() ? '2-Player ON' : '1-Player'); });
+  resizeDPR();
+
+  // UI
+  const toast=document.getElementById('toast');
+  function showToast(t){
+    toast.textContent=t; toast.style.display='block';
+    clearTimeout(showToast._t); showToast._t=setTimeout(()=>toast.style.display='none',2200);
+  }
+
+  // Config helpers
+  const CFG = window.SURFLIME_CONFIG || { };
+  function topLimitPx(){   const p=(CFG.limits?.topPercent??0.42);   return vh * Math.min(0.98, Math.max(0, p)); }
+  function bottomLimitPx(){
+    const p = (CFG.limits?.bottomPercent ?? 0.98);
+    const desiredPx = vh * Math.min(0.999, Math.max(0, p));
+    return Math.min(vh * 0.999, Math.max(topLimitPx() + 0.02*vh, desiredPx));
+  }
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  function obstacleScaleMul(){
+    const p = Number.isFinite(CFG.obstacle?.scalePercent) ? CFG.obstacle.scalePercent : 100;
+    return Math.max(0.1, Math.min(3, p / 100)); // 10%..300%
+  }
+  function depthMul(kind,y){
+    const top = topLimitPx(), bottom = bottomLimitPx();
+    const t = (bottom>top) ? clamp((y-top)/(bottom-top),0,1) : 0;
+    const d = CFG.depth?.[kind] || { topScale:1, bottomScale:1 };
+    return lerp(d.topScale??1, d.bottomScale??1, t);
+  }
+
+  // Audio
+  const TRACKS = ['./Music/Surfing.mp3','./Music/Surfing2.mp3','./Music/Surfing3.mp3'];
+  let music=null, waves=null, muted=false;
+  function startMusic(){
+    if(!music){ const src = TRACKS[(Math.random()*TRACKS.length)|0]; music = new Audio(src); music.loop = true; }
+    music.volume = muted ? 0 : 0.35; music.play().catch(()=>{});
+  }
+  function startWaves(){
+    if(!waves){ waves = new Audio(); waves.loop = true; }
+    const tryPaths = ['./Sfx/Waves.mp3','./Music/Waves.mp3'];
+    let i=0; const tryNext=()=>{ if(i>=tryPaths.length) return; waves.src = tryPaths[i++]; waves.load(); waves.play().catch(()=>{}); };
+    waves.onerror = ()=> tryNext();
+    const vol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25;
+    waves.volume = muted ? 0 : vol; tryNext();
+  }
+  function toggleMute(){
+    muted=!muted;
+    if(music) music.volume = muted ? 0 : 0.35;
+    if(waves){ const vol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25; waves.volume = muted ? 0 : vol; }
+  }
+
+  // Mascot assets (prefer config.js mapping)
+  function assetsFor(name){
+    if(CFG.mascot?.assetsFor) return CFG.mascot.assetsFor(name);
+    const SURFER=new Set(['Banana','Pineapple']);
+    const base=`./Mascots/${name}/${name}`;
+    return { surf:`${base}${SURFER.has(name)?'Surfer':'Surf'}.png`, fall:`${base}Fall.png` };
+  }
+  function availableMascots(){
+    try{ const s = localStorage.getItem('availableMascots'); if(s) return JSON.parse(s); }catch(e){}
+    return ["Banana", "Bread", "Cherry", "Grapes", "Lime", "Orange", "Pineapple", "Strawberry", "Watermelon"];
+  }
+
+  // 1P/2P mode & selections
+  function twoPlayerEnabled(){ return localStorage.getItem('twoPlayerEnabled') === 'true'; }
+  function setTwoPlayer(val){ localStorage.setItem('twoPlayerEnabled', val ? 'true' : 'false'); }
+  function selectedFor(idx){
+    const key = (idx===0) ? 'selectedMascotP1' : 'selectedMascotP2';
+    let name = localStorage.getItem(key);
+    if(!name){
+      name = (idx===0) ? 'Lime' : 'Banana';
+      localStorage.setItem(key, name);
+      if(idx===0) localStorage.setItem('selectedMascot', name);
+    }
+    return name;
+  }
+
+  // Player & input
+  const targetMascotH=112;
+  const INPUT = [ { up:false, down:false, boost:false }, { up:false, down:false, boost:false } ];
+  addEventListener('keydown',e=>{ if(e.code==='ArrowUp')INPUT[0].up=true; if(e.code==='ArrowDown')INPUT[0].down=true; if(e.code==='ArrowRight')INPUT[0].boost=true; if(e.code==='KeyW')INPUT[1].up=true; if(e.code==='KeyS')INPUT[1].down=true; if(e.code==='KeyD')INPUT[1].boost=true; if(e.code==='KeyP')togglePause(); if(e.code==='KeyM')toggleMute(); if(state===STATE.MENU && (e.code==='Enter'||e.code==='NumpadEnter')){ start(); }else if((state===STATE.OVER||state===STATE.WIN) && (e.code==='Enter'||e.code==='NumpadEnter')){ start(); }});
+  addEventListener('keyup',e=>{ if(e.code==='ArrowUp')INPUT[0].up=false; if(e.code==='ArrowDown')INPUT[0].down=false; if(e.code==='ArrowRight')INPUT[0].boost=false; if(e.code==='KeyW')INPUT[1].up=false; if(e.code==='KeyS')INPUT[1].down=false; if(e.code==='KeyD')INPUT[1].boost=false; });
+
+  function installMascotFallback(img, name, kind, primary){
+    const cands=[];
+    const names=[name, (name==='Pineapple'?'Pinapple':null)].filter(Boolean);
+    for(const nm of names){
+      const base=`./Mascots/${nm}/${nm}`;
+      if(kind==='surf'){ cands.push(`${base}Surfer.png`, `${base}Surf.png`); }
+      else { cands.push(`${base}Fall.png`); }
+    }
+    if(primary && !cands.includes(primary)) cands.unshift(primary);
+    let i=0; img.addEventListener('error', ()=>{ if(++i<cands.length) img.src=cands[i]; });
+    img.src=cands[0];
+  }
+
+  class SpritePair {
+    constructor(name){
+      this.name=name;
+      this.surf=new Image(); this.surfReady=false;
+      this.fall=new Image(); this.fallReady=false;
+      const p=assetsFor(name);
+      this.surf.onload=()=>this.surfReady=true;
+      this.fall.onload=()=>this.fallReady=true;
+      installMascotFallback(this.surf, this.name, 'surf', p.surf);
+      installMascotFallback(this.fall, this.name, 'fall', p.fall);
+    }
+  }
+  function scaleFor(kind,y,img, userScale){
+    const base = Math.min(0.25, Math.max(0.08, targetMascotH / ((img && img.height) || targetMascotH)));
+    const mul = depthMul(kind,y);
+    return base * (userScale ?? 1) * mul;
+  }
+
+  class Player{
+    constructor(index,name){ this.index=index; this.name=name; this.sprites=new SpritePair(name); this.boost=0; this.alive=true; this.USER_SCALE=1; this.reset(); }
+    reset(){ this.baseX = vw * (this.index===0 ? 0.22 : 0.18); this.x=this.baseX; this.y=world.seaLevel - (this.index===0?30:60); this.vy=0; this.r=16; this.roll=0; this.pumpPhase=0; this.alive=true; }
+    revive(){ this.reset(); }
+    setMascot(name){ this.name=name; this.sprites=new SpritePair(name); }
+    update(dt){
+      if(!this.alive) return;
+      const accel=Number.isFinite(CFG.boost?.accel)?CFG.boost.accel:0.20;
+      const decay=Number.isFinite(CFG.boost?.decay)?CFG.boost.decay:0.30;
+      const pressed=INPUT[this.index].boost;
+      this.boost=clamp(this.boost + (pressed?accel:-decay)*dt,0,1);
+      let ay=0; if(INPUT[this.index].up) ay-=700; if(INPUT[this.index].down) ay+=700;
+      this.vy += ay*dt;
+      const maxV=210; this.vy=clamp(this.vy,-maxV,maxV);
+      if(!INPUT[this.index].up && !INPUT[this.index].down){
+        if(Math.abs(this.vy) < 800*dt) this.vy=0; else this.vy -= Math.sign(this.vy)*800*dt;
+      }
+      this.y += this.vy*dt;
+      const pumpForce = Math.sin(this.pumpPhase) * 40 * this.boost;
+      this.pumpPhase += (4 + 4*this.boost) * dt;
+      this.y += pumpForce * 0.004 * dt;
+      const img=this.sprites.surfReady?this.sprites.surf:null;
+      const hw = img ? (img.width * scaleFor('mascot', this.y, img, this.USER_SCALE))*0.5 : 40;
+      const farRight = vw - (hw + 8);
+      const pushStrength = Number.isFinite(CFG.boost?.pushStrength) ? CFG.boost.pushStrength : 1.0;
+      const moveLerp = Number.isFinite(CFG.boost?.moveLerp) ? CFG.boost.moveLerp : 1.0;
+      const targetX = this.baseX + (farRight - this.baseX) * Math.max(0, Math.min(1, this.boost * pushStrength));
+      this.x += (targetX - this.x) * dt * moveLerp;
+      const hh = img ? (img.height * scaleFor('mascot', this.y, img, this.USER_SCALE))*0.5 : 40;
+      const pH = img ? img.height * scaleFor('mascot', this.y, img, this.USER_SCALE) : hh*2;
+      const topOffset = pH * 0.78;
+      const topPx = topLimitPx(), botPx = bottomLimitPx();
+      const minY = Math.max(hh, topPx + topOffset);
+      const maxY = Math.min(vh - hh, botPx - hh);
+      this.x = Math.max(Math.min(this.x, vw - hw), Math.max(hw, this.baseX));
+      this.y = Math.max(Math.min(this.y, maxY), minY);
+      this.roll += (((this.vy)*0.003 + (this.boost>0?0.12:0)) - this.roll)*dt*6;
+    }
+    draw(ctx){
+
+      ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this.roll);
+
+      const showingFall = (!this.alive) || (state===STATE.OVER);
+
+      const img   = showingFall ? this.sprites.fall     : this.sprites.surf;
+
+      const ready = showingFall ? this.sprites.fallReady: this.sprites.surfReady;
+      if(ready){
+        const s=scaleFor('mascot',this.y,img,this.USER_SCALE);
+        const w=img.width*s, h=img.height*s;
+        ctx.drawImage(img,-w*0.5,-h*0.78,w,h);
+      } else {
+        ctx.fillStyle = this.index===0 ? '#46e38a' : '#ffd166';
+        ctx.beginPath(); ctx.arc(0,0,18,0,Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  // Obstacles — draw at their native image size; only depth-based scaling is applied
+  const activeObstacleSprites = new Set();
+  const imagesLTR = [], imagesRTL = []; let bagLTR=[], bagRTL=[];
+  function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
+  function refillBag(dir){ if(dir==='ltr'){ bagLTR=shuffle(imagesLTR.slice()); } else { bagRTL=shuffle(imagesRTL.slice()); } }
+  function nextImageFor(dir){
+    const pool = dir==='ltr'?imagesLTR:imagesRTL; if(pool.length===0) return null;
+    const bag  = dir==='ltr'?bagLTR:bagRTL; if(bag.length===0) refillBag(dir);
+    let tries=bag.length; while(tries--){
+      const img = bag.shift();
+      if(!activeObstacleSprites.has(img.src)) return img;
+      bag.push(img);
+    }
+    return null;
+  }
+  function preloadObstacle(path, target){ const img=new Image(); img.onload=()=>target.push(img); img.src=path; }
+  const MAX_OBS = 100;
+  for(let i=1;i<=MAX_OBS;i++){ preloadObstacle(`./Obstacles/LeftToRight/Obstacle${i}.png`, imagesLTR); preloadObstacle(`./Obstacles/RightToLeft/Obstacle${i}.png`, imagesRTL); }
+  const SPEED={LTR_MIN:1.05,LTR_MAX:1.20,RTL_MIN:0.70,RTL_MAX:1.10};
+
+  class Obstacle{
+    constructor(){
+      const haveLTR=imagesLTR.length>0, haveRTL=imagesRTL.length>0;
+      if(!haveLTR && !haveRTL){ this.valid=false; return; }
+      this.dir = (haveLTR && haveRTL) ? (Math.random()<0.7 ? 'rtl' : 'ltr') : (haveRTL?'rtl':'ltr');
+      this.img = nextImageFor(this.dir); if(!this.img){ this.valid=false; return; }
+      activeObstacleSprites.add(this.img.src);
+
+      const topPx=topLimitPx(), botPx=bottomLimitPx();
+      // Estimate a reasonable spawn band using the image's native height and mid-depth scale
+      const midDepth = depthMul('obstacle', (topPx+botPx)/2) * obstacleScaleMul();
+      const approxH = this.img.height * midDepth;
+      const topOffset = approxH * 0.78;
+      const minSpawnY = Math.max(topPx + topOffset, 120);
+      const maxSpawnY = Math.min(vh - 60, botPx - approxH*0.5);
+
+      const Y_GAP = 56;
+      let tries=16; do{
+        this.y = minSpawnY + Math.random()*Math.max(4, maxSpawnY-minSpawnY);
+        tries--;
+      }while(tries>0 && obstacles.some(o=>o.dir!==this.dir && Math.abs(o.y - this.y) < Y_GAP));
+
+      this.x = (this.dir==='rtl') ? (vw + 120 + Math.random()*120) : (-120 - Math.random()*120);
+      const levelMul = levelSpeedMultiplier();
+      const base = (this.dir==='rtl')
+        ? (SPEED.RTL_MIN + Math.random()*(SPEED.RTL_MAX - SPEED.RTL_MIN))
+        : (SPEED.LTR_MIN + Math.random()*(SPEED.LTR_MAX - SPEED.LTR_MIN));
+      this.factor = base * levelMul;
+      this.valid=true;
+    }
+    update(dt){
+      if(!this.valid) return;
+      const v = 240 * this.factor;
+      this.x += (this.dir==='rtl' ? -v : v) * dt;
+
+      if(this.motion == null){
+        this.motion = (Math.random()<0.6) ? 'sine' : 'drift';
+        this.amp = 10 + Math.random()*12;
+        this.freq = 0.08 + Math.random()*0.10;
+        this.phase = Math.random()*Math.PI*2;
+        this.baseY = this.y;
+        this.vy = (Math.random()<0.5?1:-1) * (4 + Math.random()*6);
+        const topPx = topLimitPx(), botPx = bottomLimitPx();
+        this.minY = topPx + 40; this.maxY = botPx - 40;
+      }
+      if(this.motion === 'sine'){
+        this.y = this.baseY + Math.sin((world.time + this.phase) * Math.PI*2 * this.freq) * this.amp;
+        this.y = Math.max(Math.min(this.y, this.maxY), this.minY);
+      }else{
+        this.y += this.vy * dt;
+        if(this.y < this.minY){ this.y = this.minY; this.vy = Math.abs(this.vy); }
+        if(this.y > this.maxY){ this.y = this.maxY; this.vy = -Math.abs(this.vy); }
+      }
+    }
+    off(){ return this.dir==='rtl' ? (this.x < -120) : (this.x > vw + 120); }
+    cleanup(){ if(this.img){ activeObstacleSprites.delete(this.img.src); } }
+    hit(player){
+      if(!player.alive || !this.img) return false;
+
+      // ----- Obstacle box (scaled exactly like draw) -----
+      const depth = depthMul('obstacle', this.y) * obstacleScaleMul();
+      const oH = this.img.height * depth;
+      const oW = this.img.width  * depth;
+      const oTop = this.y - oH*0.78;
+      const oBottom = oTop + oH;
+      const oLeft = this.x - oW*0.5;
+      const oRight = this.x + oW*0.5;
+
+      // Active lower portion of obstacle
+      const oLowerFrac = Number.isFinite(CFG.collision?.obstacleLowerZone) ? CFG.collision.obstacleLowerZone : 0.40;
+      const oActiveTop = oTop + oH * (1 - oLowerFrac);
+      const oActiveBottom = oBottom;
+
+      // ----- Player box (lower portion only) -----
+      const img = player.sprites.surfReady ? player.sprites.surf : null;
+      const pH = img ? img.height * scaleFor('mascot', player.y, img, player.USER_SCALE) : player.r*2;
+      const pW = img ? img.width  * scaleFor('mascot', player.y, img, player.USER_SCALE) : player.r*2;
+      const pTop = player.y - pH*0.78;
+      const pBottom = pTop + pH;
+      const pLeft  = player.x - pW*0.5;
+      const pRight = player.x + pW*0.5;
+
+      const pLowerFrac = Number.isFinite(CFG.collision?.limeLowerZone) ? CFG.collision.limeLowerZone : 0.40;
+      const pActiveTop = pTop + pH * (1 - pLowerFrac);
+      const pActiveBottom = pBottom;
+
+      // Horizontal forgiveness (shrink hitboxes a bit)
+      const shrinkLR = (L, R, W) => {
+        const pad = W * 0.08 * 0.5; // ~8% total
+        return [L + pad, R - pad];
+      };
+      const [oL, oR] = shrinkLR(oLeft, oRight, oW);
+      const [pL, pR] = shrinkLR(pLeft, pRight, pW);
+
+      const horiz = Math.min(oR, pR) > Math.max(oL, pL);
+      const vert  = Math.min(oActiveBottom, pActiveBottom) > Math.max(oActiveTop, pActiveTop);
+
+      return horiz && vert;
+    }
+    draw(ctx){
+      if(!this.img) return;
+      ctx.save(); ctx.translate(this.x,this.y);
+      const depth = depthMul('obstacle', this.y) * obstacleScaleMul();
+      const h = this.img.height * depth;
+      const w = this.img.width  * depth;
+      ctx.drawImage(this.img, -w*0.5, -h*0.78, w, h);
+      ctx.restore();
+    }
+  }
+
+  // Flow
+  const STATE={MENU:0,RUN:1,PAUSE:2,OVER:3,WIN:4}; let state=STATE.MENU;
+  let last=0, dt=0;
+  const MAX_LEVEL=10, LEVEL_SECONDS=(Number.isFinite(CFG.level?.seconds)?CFG.level.seconds:20);
+  let level=1, levelElapsed=0, BANNER_DURATION=1.8, levelBannerT=0, levelBannerText='';
+
+  const players=[]; 
+  function applyPlayerSelections(){
+    const url = new URL(location.href);
+    if(url.searchParams.has('twoPlayer')) setTwoPlayer(url.searchParams.get('twoPlayer')==='1');
+    const want2 = twoPlayerEnabled();
+    if(players.length===0){
+      players.push(new Player(0, selectedFor(0)));
+      if(want2) players.push(new Player(1, selectedFor(1)));
+    }else{
+      if(want2 && players.length===1){ players.push(new Player(1, selectedFor(1))); }
+      else if(!want2 && players.length===2){ players.pop(); }
+      players[0].setMascot(selectedFor(0));
+      if(players[1]) players[1].setMascot(selectedFor(1));
+    }
+  }
+  applyPlayerSelections();
+
+  window.addEventListener('storage', (e)=>{
+    if(e.key==='selectedMascot' || e.key==='selectedMascotP1'){ players[0]?.setMascot(selectedFor(0)); showToast('P1: '+players[0].name); }
+    if(e.key==='selectedMascotP2'){ players[1]?.setMascot(selectedFor(1)); if(players[1]) showToast('P2: '+players[1].name); }
+    if(e.key==='twoPlayerEnabled'){ applyPlayerSelections(); showToast(twoPlayerEnabled() ? '2-Player ON' : '1-Player'); }
+  });
+
+  const obstacles=[]; let spawnTimer=0;
+  function levelSpawnInterval(){ const base=1.8, min=0.45; const t=(level-1)/(MAX_LEVEL-1); return base - (base-min)*t; }
+  function levelSpeedMultiplier(){ const t=(level-1)/(MAX_LEVEL-1); return 0.9 + 1.2*t; }
+
+  function start(){ startMusic(); startWaves(); level=1; resetForLevel(); state=STATE.RUN; showToast('P1: ↑/↓/→   P2: W/S/D   (P=pause, M=mute)'); }
+  function pause(){ if(state===STATE.RUN){ state=STATE.PAUSE; showToast('Paused'); } }
+  function resume(){ if(state===STATE.PAUSE){ state=STATE.RUN; toast.style.display='none'; } }
+  function togglePause(){ (state===STATE.RUN)?pause():resume(); }
+  function gameOver(){ state=STATE.OVER; showToast('Wipeout on Level '+level+' — Press Enter'); }
+  function winGame(){ state=STATE.WIN; showToast('Legend! You cleared all levels — press Enter'); }
+
+  function resetForLevel(){ obstacles.length=0; spawnTimer=0; levelElapsed=0; activeObstacleSprites.clear(); applyPlayerSelections(); players.forEach(p=>p.revive()); }
+  function maybeSpawn(dt){ spawnTimer-=dt; if(spawnTimer<=0){ const ob = new Obstacle(); if(ob.valid) obstacles.push(ob); const base=levelSpawnInterval(); const variance=base*0.35; spawnTimer=base + (Math.random()*2-1)*variance; } }
+  function update(){ levelElapsed += dt; players.forEach(p=>p.update(dt)); for(const o of obstacles) o.update(dt); for(let i=obstacles.length-1;i>=0;i--){ if(obstacles[i].off()){ obstacles[i].cleanup(); obstacles.splice(i,1); } } maybeSpawn(dt); for(const o of obstacles){ for(const p of players){ if(o.hit(p)){ p.alive=false; } } } if(players.every(p=>!p.alive)){ gameOver(); } if(levelBannerT>0){ levelBannerT -= dt; } if(levelElapsed>=LEVEL_SECONDS){ if(level<MAX_LEVEL){ level++; levelBannerT = BANNER_DURATION; levelBannerText = 'LEVEL ' + level; showToast('Level Up! ➜ '+level); resetForLevel(); }else{ winGame(); } } }
+
+  const doho=new Image(); let dohoReady=false; doho.onload=()=>dohoReady=true; doho.src='./Background/Doho.png';
+  function drawBG(ctx,w,h,t){ if(dohoReady){ const iw=doho.width, ih=doho.height; const topDY = 0, topDH = Math.floor(h*0.42); const midDY = Math.floor(h*0.42), midDH = Math.floor(h*0.38) + 2; const sandDY = Math.floor(h*0.80) - 2, sandDH = Math.ceil(h*0.20) + 4; const layers=[ { sy:0, sh:Math.floor(ih*.42), dy:topDY, dh:topDH, speed:8 }, { sy:Math.floor(ih*.42), sh:Math.floor(ih*.38), dy:midDY, dh:midDH, speed:30 }, { sy:Math.floor(ih*.80), sh:Math.floor(ih*.20), dy:sandDY, dh:sandDH, speed:30 } ]; for(const L of layers){ const sx=Math.floor((t*L.speed)%iw); const sw1=iw-sx; const dw1=Math.floor(w*(sw1/iw)); if(sw1>0){ ctx.drawImage(doho, sx, L.sy, sw1, L.sh, 0, L.dy, dw1, L.dh); } const sw2=sx, dw2=w-dw1; if(sw2>0&&dw2>0){ ctx.drawImage(doho, 0, L.sy, sw2, L.sh, dw1, L.dy, dw2, L.dh); } } return; } const grad=ctx.createLinearGradient(0,world.seaLevel-100,0,h); grad.addColorStop(0,'#1875c2'); grad.addColorStop(1,'#0d467b'); ctx.fillStyle=grad; ctx.fillRect(0,world.seaLevel-100,w,h-(world.seaLevel-100)); }
+  function draw(){ const w=vw,h=vh; ctx.clearRect(0,0,w,h); drawBG(ctx,w,h,world.time); const drawables=[...obstacles, ...players]; drawables.sort((a,b)=>(a.y||0)-(b.y||0)); for(const d of drawables){ d.draw?.(ctx); } ctx.save(); ctx.font='16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica'; ctx.fillStyle='#fff'; ctx.fillText(`Level ${level} / ${MAX_LEVEL}`,16,26); const remain=Math.ceil(Math.max(0,LEVEL_SECONDS-levelElapsed)); ctx.fillText(`Time: ${String(Math.floor(remain/60)).padStart(2,'0')}:${String(remain%60).padStart(2,'0')}`,16,48); if(twoPlayerEnabled()){ ctx.fillStyle='#b9ffd7'; ctx.fillText(`P1: ${players[0]?.name||'-'}`,16,72); ctx.fillStyle='#ffe399'; ctx.fillText(`P2: ${players[1]?.name||'-'}`,16,92); }else{ ctx.fillStyle='#b9ffd7'; ctx.fillText(`Mascot: ${players[0]?.name||'-'}`,16,72); } ctx.restore(); if(state===STATE.MENU){ drawCenter('Surf Lime','Press Enter to start'); } if(state===STATE.PAUSE){ drawCenter('Paused','Press P to resume'); } if(state===STATE.WIN){ drawCenter('You Win!','Press Enter to play again'); }
+  if(state===STATE.OVER){ drawCenter('Wipeout!','Press Enter to Play Again'); } if(levelBannerT>0){ drawLevelBanner(); } }
+  function drawCenter(title, sub){ ctx.save(); ctx.textAlign = 'center'; ctx.fillStyle = '#dfeaff'; ctx.font = 'bold 42px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica'; ctx.fillText(title, vw/2, vh/2 - 6); ctx.font = '16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica'; ctx.fillStyle = '#b5c7e6cc'; ctx.fillText(sub, vw/2, vh/2 + 22); ctx.restore(); }
+  function drawLevelBanner(){ const w=vw, h=vh; const elapsed = BANNER_DURATION - levelBannerT; const alpha = elapsed < 0.25 ? (elapsed/0.25) : (elapsed > BANNER_DURATION-0.35 ? (BANNER_DURATION - elapsed)/0.35 : 1); const bw = Math.min(680, Math.floor(w*0.72)); const bh = 120; const bannerY = (CFG.ui?.levelBannerYPercent ?? 0.18); const x = (w-bw)/2, y = h * bannerY; ctx.save(); ctx.globalAlpha = 0.75 * Math.max(0,alpha); ctx.fillStyle = '#061427'; ctx.strokeStyle = '#46e38a'; ctx.lineWidth = 3; ctx.beginPath(); const r = 16; ctx.moveTo(x+r,y); ctx.arcTo(x+bw,y,x+bw,y+bh,r); ctx.arcTo(x+bw,y+bh,x,y+bh,r); ctx.arcTo(x,y+bh,x,y,r); ctx.arcTo(x,y,x+bw,y,r); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.globalAlpha = Math.max(0,alpha); ctx.fillStyle = '#ffffff'; ctx.font = 'bold 52px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.shadowColor = '#000'; ctx.shadowBlur = 18; ctx.fillText(levelBannerText, w/2, y+bh/2); ctx.restore(); }
+  function loop(t){ dt=Math.min(0.033, (t-last)/1000 || 0); last=t; if(state===STATE.RUN){ world.time += dt; update(); } draw(); requestAnimationFrame(loop); }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Surf Lime • Settings</title>
+  <style>
+    :root{ --bg:#0b1320; --panel:#0f1e35; --ink:#eaf2ff; --accent:#46e38a; --muted:#94a3b8; }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:1080px;margin:24px auto;padding:0 16px}
+    h1{margin:0 0 12px;font-size:28px}
+    .bar{ display:flex; justify-content:space-between; align-items:center; margin:16px 0 18px;
+      background:#0f233caa; border:1px solid #ffffff22; border-radius:12px; padding:12px 14px; backdrop-filter:blur(6px); }
+    .toggle{ display:flex; align-items:center; gap:8px; }
+    .toggle input{ width:42px; height:22px; }
+    .muted{ color:var(--muted); font-size:12px }
+    .psec{ margin-top:14px; }
+    .phead{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .chip{ display:inline-block; padding:4px 10px; border-radius:999px; font-weight:700; letter-spacing:.2px;
+      color:#0b1320; background:linear-gradient(180deg,#c8ffe2,#6ff3b1); border:1px solid #0b132033; text-shadow:0 1px 0 #ffffffc2; }
+    .grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(130px,1fr)); gap:12px; margin-top:10px; }
+    .tile{ background:#0f1e35; border:1px solid #1e3355; border-radius:14px; padding:10px; cursor:pointer; text-align:center; }
+    .tile img{ width:100%; height:100px; object-fit:contain; display:block; }
+    .tname{ margin-top:8px; font-weight:700; color:#eaf2ff; }
+    .tile[aria-selected="true"]{ outline:2px solid #46e38a; box-shadow:0 0 0 3px #46e38a33 inset; }
+    .footer{display:flex; gap:10px; margin-top:18px}
+    .link-btn{ display:inline-flex; align-items:center; justify-content:center; height:40px; padding:0 14px;
+      border-radius:12px; border:1px solid #ffffff22; color:#fff; text-decoration:none; background:#0f233caa; }
+    .link-btn:hover{ background:#122c4bee }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Settings</h1>
+
+    <div class="bar">
+      <div class="toggle">
+        <label for="twoP"><strong>Two-Player Mode</strong></label>
+        <input type="checkbox" id="twoP" />
+      </div>
+      <a class="link-btn" href="main.html">Back to Game</a>
+    </div>
+
+    <p class="muted">Choose a mascot for each player.</p>
+
+    <section class="psec" id="p1">
+      <div class="phead"><h3>Player 1</h3><span class="chip" id="chip1"></span></div>
+      <div class="grid" id="grid1"></div>
+    </section>
+
+    <section class="psec" id="p2">
+      <div class="phead"><h3>Player 2</h3><span class="chip" id="chip2"></span></div>
+      <div class="grid" id="grid2"></div>
+    </section>
+
+    <div class="footer">
+      <a class="link-btn" href="main.html">Play</a>
+    </div>
+  </div>
+
+<script src="config.js"></script>
+<script>
+  const ALL_MASCOTS = ["Banana", "Bread", "Cherry", "Grapes", "Lime", "Orange", "Pineapple", "Strawberry", "Watermelon"];
+  try{ localStorage.setItem('availableMascots', JSON.stringify(ALL_MASCOTS)); }catch(e){}
+
+  // Defaults
+  if(!localStorage.getItem('selectedMascotP1')) localStorage.setItem('selectedMascotP1','Lime');
+  if(!localStorage.getItem('selectedMascot')) localStorage.setItem('selectedMascot','Lime'); // legacy
+  if(!localStorage.getItem('selectedMascotP2')) localStorage.setItem('selectedMascotP2','Banana');
+
+  const twoP = document.getElementById('twoP');
+  twoP.checked = localStorage.getItem('twoPlayerEnabled') === 'true';
+  function toggleP2(){ document.getElementById('p2').style.display = twoP.checked ? '' : 'none'; }
+  twoP.addEventListener('change', ()=> { localStorage.setItem('twoPlayerEnabled', twoP.checked?'true':'false'); toggleP2(); });
+  toggleP2();
+
+  // Use config's assetsFor
+  const assetsFor = (name)=> window.SURFLIME_CONFIG?.mascot?.assetsFor(name);
+  function installMascotFallback(img, name, primary){
+    const cands=[];
+    const names=[name, (name==='Pineapple'?'Pinapple':null)].filter(Boolean);
+    for(const nm of names){ const base=`./Mascots/${nm}/${nm}`; cands.push(`${base}Surfer.png`, `${base}Surf.png`); }
+    if(primary && !cands.includes(primary)) cands.unshift(primary);
+    let i=0; img.addEventListener('error', ()=>{ if(++i<cands.length) img.src=cands[i]; });
+    img.src=cands[0];
+  }
+
+  function makeTile(name, playerIndex){
+    const t = document.createElement('button');
+    t.type='button';
+    t.className='tile';
+    t.setAttribute('data-name', name);
+    t.setAttribute('aria-selected','false');
+    const img = document.createElement('img');
+    const p = assetsFor(name);
+    installMascotFallback(img, name, p?.surf);
+    img.alt = name;
+    const label = document.createElement('div');
+    label.className='tname'; label.textContent=name;
+    t.appendChild(img); t.appendChild(label);
+    t.addEventListener('click', () => selectMascot(playerIndex, name));
+    return t;
+  }
+
+  function selectMascot(idx, name){
+    const key = idx===0 ? 'selectedMascotP1' : 'selectedMascotP2';
+    localStorage.setItem(key, name);
+    if(idx===0) localStorage.setItem('selectedMascot', name); // legacy
+    updateSelections();
+  }
+
+  function updateSelections(){
+    const p1sel = localStorage.getItem('selectedMascotP1') || 'Lime';
+    const p2sel = localStorage.getItem('selectedMascotP2') || 'Banana';
+    document.getElementById('chip1').textContent = p1sel;
+    document.getElementById('chip2').textContent = p2sel;
+    document.querySelectorAll('#grid1 .tile').forEach(el=> el.setAttribute('aria-selected', el.dataset.name===p1sel ? 'true' : 'false'));
+    document.querySelectorAll('#grid2 .tile').forEach(el=> el.setAttribute('aria-selected', el.dataset.name===p2sel ? 'true' : 'false'));
+  }
+
+  const g1 = document.getElementById('grid1');
+  const g2 = document.getElementById('grid2');
+  ALL_MASCOTS.forEach(n => { g1.appendChild(makeTile(n,0)); g2.appendChild(makeTile(n,1)); });
+  updateSelections();
+</script>
+</body>
+</html>
