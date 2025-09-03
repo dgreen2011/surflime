@@ -572,6 +572,7 @@ function installMascotFallback(img, name, kind, primary){
     }
   }
   applyPlayerSelections();
+  applyUserScaleToPlayers();
   window.addEventListener('storage', (e)=>{
     players[0]?.setMascot(selectedFor(0));
     if(players[1]) players[1].setMascot(selectedFor(1));
@@ -583,6 +584,7 @@ function installMascotFallback(img, name, kind, primary){
     obstacles.length=0; spawnTimer=0; levelElapsed=0;
     activeObstacleSprites.clear(); applyPlayerSelections();
     players.forEach(p=>p.revive());
+    applyUserScaleToPlayers();
   }
   function maybeSpawn(dt){
     spawnTimer-=dt;

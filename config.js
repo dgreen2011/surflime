@@ -7,7 +7,7 @@
   // ---- Defaults (used if nothing in localStorage) ----
   const DEFAULTS = {
     mascot: {
-      scale: .60,          // 1.00 = original artwork size  (kept)
+      scale: 1,          // 1.00 = original artwork size  (kept)
       selected: "Lime"     // starter mascot if none chosen yet  (kept)
     },
     // Depth perception scaling (used by main.html for y-based size)
