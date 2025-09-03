@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Surf Lime • Settings</title>
   <style>
     :root{ --bg:#0b1320; --panel:#0f1e35; --ink:#eaf2ff; --accent:#46e38a; --muted:#94a3b8; }
@@ -15,6 +15,13 @@
     .toggle{ display:flex; align-items:center; gap:8px; }
     .toggle input{ width:42px; height:22px; }
     .muted{ color:var(--muted); font-size:12px }
+    .info{
+      margin:16px 0 10px; padding:14px 16px; border-radius:14px;
+      background:#0f1e35; border:1px solid #1e3355;
+    }
+    .info h2{ margin:0 0 8px; font-size:18px }
+    .info ul{ margin:6px 0 0 18px; padding:0 }
+    .info li{ margin:4px 0 }
     .psec{ margin-top:14px; }
     .phead{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
     .chip{ display:inline-block; padding:4px 10px; border-radius:999px; font-weight:700; letter-spacing:.2px;
@@ -24,7 +31,6 @@
     .tile img{ width:100%; height:100px; object-fit:contain; display:block; }
     .tname{ margin-top:8px; font-weight:700; color:#eaf2ff; }
     .tile[aria-selected="true"]{ outline:2px solid #46e38a; box-shadow:0 0 0 3px #46e38a33 inset; }
-    .footer{display:flex; gap:10px; margin-top:18px}
     .link-btn{ display:inline-flex; align-items:center; justify-content:center; height:40px; padding:0 14px;
       border-radius:12px; border:1px solid #ffffff22; color:#fff; text-decoration:none; background:#0f233caa; }
     .link-btn:hover{ background:#122c4bee }
@@ -39,10 +45,16 @@
         <label for="twoP"><strong>Two-Player Mode</strong></label>
         <input type="checkbox" id="twoP" />
       </div>
-      <a class="link-btn" href="main.html">Back to Game</a>
+      <a class="link-btn" href="main.html">Play</a>
     </div>
 
-    <p class="muted">Choose a mascot for each player.</p>
+    <!-- How to play -->
+    <div class="info" id="howto">
+      <h2>How to play</h2>
+      <ul id="howto-list">
+        <!-- Filled by script with Desktop vs Mobile copy -->
+      </ul>
+    </div>
 
     <section class="psec" id="p1">
       <div class="phead"><h3>Player 1</h3><span class="chip" id="chip1"></span></div>
@@ -53,29 +65,60 @@
       <div class="phead"><h3>Player 2</h3><span class="chip" id="chip2"></span></div>
       <div class="grid" id="grid2"></div>
     </section>
-
-    <div class="footer">
-      <a class="link-btn" href="main.html">Play</a>
-    </div>
   </div>
 
 <script src="config.js"></script>
 <script>
-  const ALL_MASCOTS = ["Banana", "Bread", "Cherry", "Grapes", "Lime", "Orange", "Pineapple", "Strawberry", "Watermelon"];
+  const IS_MOBILE = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
+
+  const ALL_MASCOTS = ["Lime","Banana","Strawberry","Grapes","Orange","Pineapple","Watermelon"];
   try{ localStorage.setItem('availableMascots', JSON.stringify(ALL_MASCOTS)); }catch(e){}
 
-  // Defaults
   if(!localStorage.getItem('selectedMascotP1')) localStorage.setItem('selectedMascotP1','Lime');
-  if(!localStorage.getItem('selectedMascot')) localStorage.setItem('selectedMascot','Lime'); // legacy
+  if(!localStorage.getItem('selectedMascot'))  localStorage.setItem('selectedMascot','Lime'); // legacy
   if(!localStorage.getItem('selectedMascotP2')) localStorage.setItem('selectedMascotP2','Banana');
 
+  // Two-player toggle (disabled on mobile)
   const twoP = document.getElementById('twoP');
-  twoP.checked = localStorage.getItem('twoPlayerEnabled') === 'true';
-  function toggleP2(){ document.getElementById('p2').style.display = twoP.checked ? '' : 'none'; }
-  twoP.addEventListener('change', ()=> { localStorage.setItem('twoPlayerEnabled', twoP.checked?'true':'false'); toggleP2(); });
-  toggleP2();
+  const p2Section = document.getElementById('p2');
 
-  // Use config's assetsFor
+  if(IS_MOBILE){
+    localStorage.setItem('twoPlayerEnabled','false');
+    twoP.checked = false;
+    twoP.disabled = true;
+    p2Section.style.display = 'none';
+  }else{
+    twoP.checked = localStorage.getItem('twoPlayerEnabled') === 'true';
+    twoP.addEventListener('change', ()=> {
+      localStorage.setItem('twoPlayerEnabled', twoP.checked?'true':'false');
+      p2Section.style.display = twoP.checked ? '' : 'none';
+    });
+    p2Section.style.display = twoP.checked ? '' : 'none';
+  }
+
+  // How-to content (desktop vs mobile)
+  const list = document.getElementById('howto-list');
+  const li = (html)=>{ const el=document.createElement('li'); el.innerHTML=html; return el; };
+  if(IS_MOBILE){
+    list.append(
+      li('<strong>Start / Resume:</strong> Tap anywhere.'),
+      li('<strong>Move:</strong> Swipe <kbd>up</kbd>/<kbd>down</kbd>.'),
+      li('<strong>Boost:</strong> Tap &amp; hold anywhere.'),
+      li('<strong>Goal:</strong> Dodge obstacles and survive. Levels advance automatically.'),
+      li('<strong>Levels:</strong> Infinite; difficulty ramps each level.'),
+      li('<strong>Two-player:</strong> Not supported on mobile.')
+    );
+  }else{
+    list.append(
+      li('<strong>Start / Pause / Resume:</strong> Press <kbd>Enter</kbd>.'),
+      li('<strong>Player&nbsp;1:</strong> Move with <kbd>↑</kbd>/<kbd>↓</kbd>, boost with <kbd>→</kbd>.'),
+      li('<strong>Player&nbsp;2 (optional):</strong> <kbd>W</kbd>/<kbd>S</kbd> to move, <kbd>D</kbd> to boost.'),
+      li('<strong>Goal:</strong> Dodge obstacles and survive. Levels advance automatically.'),
+      li('<strong>Levels:</strong> Infinite; difficulty ramps each level.'),
+      li('<strong>Mute:</strong> Press <kbd>M</kbd>.')
+    );
+  }
+
   const assetsFor = (name)=> window.SURFLIME_CONFIG?.mascot?.assetsFor(name);
   function installMascotFallback(img, name, primary){
     const cands=[];
@@ -88,16 +131,13 @@
 
   function makeTile(name, playerIndex){
     const t = document.createElement('button');
-    t.type='button';
-    t.className='tile';
-    t.setAttribute('data-name', name);
-    t.setAttribute('aria-selected','false');
+    t.type='button'; t.className='tile';
+    t.setAttribute('data-name', name); t.setAttribute('aria-selected','false');
     const img = document.createElement('img');
-    const p = assetsFor(name);
+    const p = assetsFor?.(name);
     installMascotFallback(img, name, p?.surf);
     img.alt = name;
-    const label = document.createElement('div');
-    label.className='tname'; label.textContent=name;
+    const label = document.createElement('div'); label.className='tname'; label.textContent=name;
     t.appendChild(img); t.appendChild(label);
     t.addEventListener('click', () => selectMascot(playerIndex, name));
     return t;
@@ -119,9 +159,8 @@
     document.querySelectorAll('#grid2 .tile').forEach(el=> el.setAttribute('aria-selected', el.dataset.name===p2sel ? 'true' : 'false'));
   }
 
-  const g1 = document.getElementById('grid1');
-  const g2 = document.getElementById('grid2');
-  ALL_MASCOTS.forEach(n => { g1.appendChild(makeTile(n,0)); g2.appendChild(makeTile(n,1)); });
+  const g1 = document.getElementById('grid1'), g2 = document.getElementById('grid2');
+  ["Lime","Banana","Strawberry","Grapes","Orange","Pineapple","Watermelon"].forEach(n => { g1.appendChild(makeTile(n,0)); g2.appendChild(makeTile(n,1)); });
   updateSelections();
 </script>
 </body>

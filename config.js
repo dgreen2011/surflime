@@ -29,7 +29,7 @@
 
   // ---- Export the unified config object ----
   window.SURFLIME_CONFIG = {
-    level: { seconds: 20 },  // seconds per level (used by main.html)
+    level: { seconds: 30 },  // seconds per level (used by main.html)
 
     // Global obstacle scale: 100 = native size; 20 = 20% of native; 80 = 20% smaller.
     obstacle: { scalePercent: 15 },
