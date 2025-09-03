@@ -23,9 +23,9 @@
 
     obstacle: {
       // Desktop: percent of native art size (100 = unchanged)
-      scalePercent: 100,
+      scalePercent: 50,
       // Mobile: percent of native art size; intentionally smaller than desktop
-      scalePercentMobile: 85
+      scalePercentMobile: 30
     },
 
     // Depth perception scaling (used by index.html for y-based size)
@@ -37,8 +37,8 @@
 
     // Vertical movement limits as a fraction of canvas height
     limits: {
-      topPercent: 0.42,
-      bottomPercent: 0.98
+      topPercent: 0.20,
+      bottomPercent: 0.80
     },
 
     // Per-level timing
