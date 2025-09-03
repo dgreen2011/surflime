@@ -67,7 +67,6 @@
     setTimeout(updateMuteUI, 0);
   }
 
-
   // --- Apply mascot scale from config.js and keep it in sync ---
   function applyUserScaleToPlayers(){
     const desktop = Number.isFinite(CFG.mascot?.scale) ? CFG.mascot.scale : 1;
@@ -75,7 +74,6 @@
     const s = IS_MOBILE ? mobile : desktop;
     (players||[]).forEach(p=> p.USER_SCALE = s);
   }
-
 
   // ===== Default to 1-Player on first load of a browser session =====
   try {
@@ -103,8 +101,7 @@
     world.seaLevel = vh * 0.58;
   }
   addEventListener('resize', resizeDPR);
-  addEventListener('focus', ()=>{ applyPlayerSelections();
-  applyUserScaleToPlayers(); });
+  addEventListener('focus', ()=>{ applyPlayerSelections(); applyUserScaleToPlayers(); });
   resizeDPR();
 
   // Config helpers
@@ -257,9 +254,7 @@
     if(e.code==='KeyD')INPUT[1].boost=false;
   });
 
-  
   // --- Mobile gestures (pointer events) ---
-  // Simplified: swipe up => move up, swipe down => move down. No boost on mobile.
   const touchPointers = new Map(); // id -> {y}
   let upDownClearTimer=null;
   const SWIPE_EPS = 6;        // px change to count as up/down
@@ -305,11 +300,12 @@
   addEventListener('pointerup', onPointerUp, {passive:false});
   addEventListener('pointercancel', onPointerUp, {passive:false});
 
-  // Fallbacks for very old iOS Safari (no harm on others)
+  // Fallbacks for very old iOS Safari
   canvas.addEventListener('gesturestart', e=>e.preventDefault());
   canvas.addEventListener('gesturechange', e=>e.preventDefault());
   canvas.addEventListener('gestureend', e=>e.preventDefault());
-function installMascotFallback(img, name, kind, primary){
+
+  function installMascotFallback(img, name, kind, primary){
     const cands=[];
     const names=[name, (name==='Pineapple'?'Pinapple':null)].filter(Boolean);
     for(const nm of names){
@@ -446,7 +442,7 @@ function installMascotFallback(img, name, kind, primary){
       this.valid=true;
     }
 
-    // Smooth bounds: spring back + damping, and keep sine motion within safe envelope
+    // Smooth bounds & motion
     _enforceBounds(dt){
       const topPx=topLimitPx(), botPx=bottomLimitPx();
       const depth = depthMul('obstacle', this.y) * obstacleScaleMul();
@@ -455,8 +451,8 @@ function installMascotFallback(img, name, kind, primary){
       const minCenter = topPx + h*0.78 + 2;
       const maxCenter = botPx - (h - h*0.78) - 2;
 
-      const k = 12;          // spring strength
-      const damp = 0.15;     // velocity damping when contacting
+      const k = 12;
+      const damp = 0.15;
 
       if(this.y < minCenter){
         const pen = (minCenter - this.y);
@@ -590,7 +586,6 @@ function installMascotFallback(img, name, kind, primary){
     activeObstacleSprites.clear(); applyPlayerSelections();
     players.forEach(p=>p.revive());
     applyUserScaleToPlayers(); // keep scale after reset
-
   }
   function maybeSpawn(dt){
     spawnTimer-=dt;
@@ -624,9 +619,8 @@ function installMascotFallback(img, name, kind, primary){
     if(levelBannerT>0){ levelBannerT -= dt; }
   }
 
-  // Background + readable overlays
+  // Background
   const doho=new Image(); let dohoReady=false; doho.onload=()=>dohoReady=true; doho.src='./Background/Doho.png';
-  
   function drawBG(ctx,w,h,t){
     if(dohoReady){
       const iw=doho.width, ih=doho.height;
@@ -648,7 +642,6 @@ function installMascotFallback(img, name, kind, primary){
           for(; x < w; x += tileW){
             ctx.drawImage(doho, 0, L.sy, iw, L.sh, x, L.dy, tileW, L.dh);
           }
-          // also draw one tile to the left to cover any gap
           ctx.drawImage(doho, 0, L.sy, iw, L.sh, x - tileW, L.dy, tileW, L.dh);
         } else {
           const sx=Math.floor((t*L.speed)%iw);
@@ -660,7 +653,7 @@ function installMascotFallback(img, name, kind, primary){
     }
   }
 
-
+  // Reusable rounded rect path
   function roundRectPath(ctx, x, y, w, h, r){
     ctx.beginPath();
     ctx.moveTo(x+r, y);
@@ -670,6 +663,8 @@ function installMascotFallback(img, name, kind, primary){
     ctx.arcTo(x,   y,   x+w, y,   r);
     ctx.closePath();
   }
+
+  // Simple center messages
   function drawTextPanel(text, cx, cy, font, padX=14, padY=8){
     ctx.save();
     ctx.font = font;
@@ -696,63 +691,99 @@ function installMascotFallback(img, name, kind, primary){
     const cx = vw/2;
     let cy = vh/2 - 14;
     drawTextPanel(title, cx, cy, 'bold 42px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica');
-    cy = vh/2 + 28;
-    drawTextPanel(sub, cx, cy, '600 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica');
-    ctx.restore();
-  }
-  function drawLevelBanner(){
-    const w=vw, h=vh;
-    const elapsed = BANNER_DURATION - levelBannerT;
-    const alpha = elapsed < 0.25 ? (elapsed/0.25) : (elapsed > BANNER_DURATION-0.35 ? (BANNER_DURATION - elapsed)/0.35 : 1);
-    const bw = Math.min(680, Math.floor(w*0.72));
-    const bh = 120;
-    const bannerY = (CFG.ui?.levelBannerYPercent ?? 0.18);
-    const x = (w-bw)/2, y = h * bannerY;
-    ctx.save();
-    ctx.globalAlpha = 0.75 * Math.max(0,alpha);
-    ctx.fillStyle = '#061427';
-    ctx.strokeStyle = '#46e38a';
-    ctx.lineWidth = 3;
-    roundRectPath(ctx, x, y, bw, bh, 16);
-    ctx.fill(); ctx.stroke();
-    ctx.globalAlpha = Math.max(0,alpha);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 52px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = '#000';
-    ctx.shadowBlur = 18;
-    ctx.fillText(levelBannerText, w/2, y+bh/2);
+    if(sub){
+      cy = vh/2 + 28;
+      drawTextPanel(sub, cx, cy, '600 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica');
+    }
     ctx.restore();
   }
 
-  function draw(){
-  
-  function drawLevelPill(){
-    const label = `LEVEL ${level}`;
+  // NEW: modern level banner (glass + neon + pop)
+  function drawLevelBanner(){
+    const w=vw, h=vh;
+    const elapsed = BANNER_DURATION - levelBannerT;
+    // fade in / out
+    const alpha = elapsed < 0.25 ? (elapsed/0.25) : (elapsed > BANNER_DURATION-0.35 ? (BANNER_DURATION - elapsed)/0.35 : 1);
+    const bw = Math.min(700, Math.floor(w*0.76));
+    const bh = 128;
+    const bannerY = (CFG.ui?.levelBannerYPercent ?? 0.18);
+
+    // subtle pop-in scale
+    const tIn = Math.min(1, elapsed/0.28);
+    const easeOutBack = (x)=>{ const c1=1.70158, c3=c1+1; return 1 + c3*Math.pow(x-1,3) + c1*Math.pow(x-1,2); };
+    const scale = 0.92 + 0.08*easeOutBack(tIn);
+
     ctx.save();
-    const padX=12, padY=6;
-    ctx.font='12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
-    const w = ctx.measureText(label).width + padX*2;
-    const h = 26;
-    const x = 12, y = 10;
-    ctx.globalAlpha = 0.85;
-    ctx.fillStyle = '#0b1f39';
-    ctx.strokeStyle = '#46e38a';
-    ctx.lineWidth = 2;
-    roundRectPath(ctx, x, y, w, h, 14);
-    ctx.fill(); ctx.stroke();
-    ctx.globalAlpha = 1;
-    ctx.fillStyle='#c8ffe2';
-    ctx.textAlign='left'; ctx.textBaseline='middle';
-    ctx.fillText(label, x+padX, y + h/2 + 1);
+    ctx.globalAlpha = 0.85 * Math.max(0,alpha);
+    ctx.translate(w/2, h*bannerY + bh/2);
+    ctx.scale(scale, scale);
+
+    // panel
+    const x = -bw/2, y = -bh/2;
+    ctx.fillStyle = '#061427d0';
+    roundRectPath(ctx, x, y, bw, bh, 18);
+    ctx.fill();
+
+    // neon gradient stroke
+    const g = ctx.createLinearGradient(x, y, x+bw, y+bh);
+    g.addColorStop(0,   '#3be08f');
+    g.addColorStop(0.5, '#76f7c1');
+    g.addColorStop(1,   '#3be08f');
+    ctx.strokeStyle = g;
+    ctx.lineWidth = 3;
+    roundRectPath(ctx, x, y, bw, bh, 18);
+    ctx.stroke();
+
+    // accent underline bar
+    ctx.globalAlpha = Math.max(0,alpha);
+    const barW = Math.min(bw-40, 520);
+    const barH = 6;
+    const barX = -barW/2;
+    const barY = 18;
+    const g2 = ctx.createLinearGradient(barX, 0, barX+barW, 0);
+    g2.addColorStop(0,'#ffffff22'); g2.addColorStop(1,'#46e38a');
+    ctx.fillStyle = g2;
+    roundRectPath(ctx, barX, barY, barW, barH, 3);
+    ctx.fill();
+
+    // text
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '800 56px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
+    ctx.fillText(levelBannerText, 0, -8);
+
     ctx.restore();
   }
+
+  // NEW: loader gate — wait for P1 surf sprite
+  function mascotReady(){
+    return !!(players[0] && players[0].sprites && players[0].sprites.surfReady);
+  }
+
+  function draw(){
+    // (inner helper replaced: Level now matches HUD style)
+    function drawLevelLabel(){
+      ctx.save();
+      ctx.font='16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
+      ctx.fillStyle='#ffffff';
+      ctx.fillText(`Level: ${level}`,16,24);
+      ctx.restore();
+    }
 
     const w=vw,h=vh;
     ctx.clearRect(0,0,w,h);
     drawBG(ctx,w,h,world.time);
 
+    // Show loader until P1 mascot is ready
+    if(!mascotReady()){
+      drawCenter('Loading...', '');
+      return;
+    }
+
+    // Normal drawables
     const drawables=[...obstacles, ...players];
     drawables.sort((a,b)=>(a.y||0)-(b.y||0));
     for(const d of drawables){ d.draw?.(ctx); }
@@ -761,7 +792,7 @@ function installMascotFallback(img, name, kind, primary){
     ctx.save();
     ctx.font='16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
     ctx.fillStyle='#fff';
-    drawLevelPill();
+    drawLevelLabel();
     const remain=Math.ceil(Math.max(0,LEVEL_SECONDS-levelElapsed));
     ctx.fillText(`Time: ${String(Math.floor(remain/60)).padStart(2,'0')}:${String(remain%60).padStart(2,'0')}`,16,48);
     if(!IS_MOBILE && twoPlayerEnabled()){
