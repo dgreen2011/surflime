@@ -27,6 +27,16 @@
 <body>
   <canvas id="game" width="1024" height="576"></canvas>
   <div class="icon-row">
+    <button id="btnMute" class="icon-btn" title="Mute" aria-label="Mute">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <line x1="23" y1="9" x2="17" y2="15"></line>
+        <line x1="17" y1="9" x2="23" y2="15"></line>
+      </svg>
+      <span>Mute</span>
+    </button>
+
     <a class="icon-btn" href="settings.html" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
@@ -43,6 +53,20 @@
 (()=>{
   // ===== Mobile detect =====
   const IS_MOBILE = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
+
+  // --- Mute button wiring ---
+  const muteBtn = document.getElementById('btnMute');
+  function updateMuteUI(){
+    if(!muteBtn) return;
+    muteBtn.querySelector('span').textContent = muted ? 'Unmute' : 'Mute';
+    muteBtn.title = muted ? 'Unmute' : 'Mute';
+  }
+  if(muteBtn){
+    muteBtn.addEventListener('click',(e)=>{ e.preventDefault(); toggleMute(); updateMuteUI(); });
+    // init label after any audio init
+    setTimeout(updateMuteUI, 0);
+  }
+
 
   // --- Apply mascot scale from config.js and keep it in sync ---
   function applyUserScaleToPlayers(){
@@ -324,9 +348,10 @@ function installMascotFallback(img, name, kind, primary){
       const pressed=INPUT[this.index].boost;
       this.boost=clamp(this.boost + (pressed?accel:-decay)*dt,0,1);
 
-      let ay=0; if(INPUT[this.index].up) ay-=700; if(INPUT[this.index].down) ay+=700;
+      const mobileMul = IS_MOBILE ? 1.25 : 1.0;
+      let ay=0; if(INPUT[this.index].up) ay-=700*mobileMul; if(INPUT[this.index].down) ay+=700*mobileMul;
       this.vy += ay*dt;
-      const maxV=210; this.vy=clamp(this.vy,-maxV,maxV);
+      const maxV=210*mobileMul; this.vy=clamp(this.vy,-maxV,maxV);
       if(!INPUT[this.index].up && !INPUT[this.index].down){
         if(Math.abs(this.vy) < 800*dt) this.vy=0; else this.vy -= Math.sign(this.vy)*800*dt;
       }
@@ -359,14 +384,7 @@ function installMascotFallback(img, name, kind, primary){
       const showingFall = (!this.alive) || (state===STATE.OVER);
       const img   = showingFall ? this.sprites.fall     : this.sprites.surf;
       const ready = showingFall ? this.sprites.fallReady: this.sprites.surfReady;
-      if(ready){
-        const s=scaleFor('mascot',this.y,img,this.USER_SCALE);
-        const w=img.width*s, h=img.height*s;
-        ctx.drawImage(img,-w*0.5,-h*0.78,w,h);
-      } else {
-        ctx.fillStyle = this.index===0 ? '#46e38a' : '#ffd166';
-        ctx.beginPath(); ctx.arc(0,0,18,0,Math.PI*2); ctx.fill();
-      }
+      if(ready){ const s=scaleFor('mascot',this.y,img,this.USER_SCALE); const w=img.width*s, h=img.height*s; ctx.drawImage(img,-w*0.5,-h*0.78,w,h); }
       ctx.restore();
     }
   }
@@ -701,6 +719,28 @@ function installMascotFallback(img, name, kind, primary){
   }
 
   function draw(){
+  
+  function drawLevelPill(){
+    const label = `LEVEL ${level}`;
+    ctx.save();
+    const padX=12, padY=6;
+    ctx.font='12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
+    const w = ctx.measureText(label).width + padX*2;
+    const h = 26;
+    const x = 12, y = 10;
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#0b1f39';
+    ctx.strokeStyle = '#46e38a';
+    ctx.lineWidth = 2;
+    roundRectPath(ctx, x, y, w, h, 14);
+    ctx.fill(); ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle='#c8ffe2';
+    ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(label, x+padX, y + h/2 + 1);
+    ctx.restore();
+  }
+
     const w=vw,h=vh;
     ctx.clearRect(0,0,w,h);
     drawBG(ctx,w,h,world.time);
@@ -713,7 +753,7 @@ function installMascotFallback(img, name, kind, primary){
     ctx.save();
     ctx.font='16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
     ctx.fillStyle='#fff';
-    ctx.fillText(`Level ${level}`,16,26);
+    drawLevelPill();
     const remain=Math.ceil(Math.max(0,LEVEL_SECONDS-levelElapsed));
     ctx.fillText(`Time: ${String(Math.floor(remain/60)).padStart(2,'0')}:${String(remain%60).padStart(2,'0')}`,16,48);
     if(!IS_MOBILE && twoPlayerEnabled()){

@@ -41,7 +41,7 @@
     <h1>Settings</h1>
 
     <div class="bar">
-      <div class="toggle">
+      <div class="toggle" id="twoToggle">
         <label for="twoP"><strong>Two-Player Mode</strong></label>
         <input type="checkbox" id="twoP" />
       </div>
@@ -80,9 +80,11 @@
 
   // Two-player toggle (disabled on mobile)
   const twoP = document.getElementById('twoP');
+  const twoToggle = document.getElementById('twoToggle');
   const p2Section = document.getElementById('p2');
 
   if(IS_MOBILE){
+    if(twoToggle) twoToggle.style.display='none';
     localStorage.setItem('twoPlayerEnabled','false');
     twoP.checked = false;
     twoP.disabled = true;
