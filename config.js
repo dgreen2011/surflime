@@ -23,9 +23,9 @@
 
     obstacle: {
       // Desktop: percent of native art size (100 = unchanged)
-      scalePercent: 25,
+      scalePercent: 10,
       // Mobile: percent of native art size; intentionally smaller than desktop
-      scalePercentMobile: 15
+      scalePercentMobile: 5
     },
 
     // Depth perception scaling (used by index.html for y-based size)
