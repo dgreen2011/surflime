@@ -22,10 +22,35 @@
     }
     .icon-btn:hover{ background:#122c4bee }
     .icon-btn svg{ width:20px; height:20px }
-  </style>
+  
+    /* Rotate-to-landscape overlay */
+    #rotateOverlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.86);
+      color: #fff; display: none;
+      align-items: center; justify-content: center;
+      text-align: center; padding: 24px; z-index: 30;
+      font: 600 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+    #rotateOverlay.show { display: flex; }
+    #rotateOverlay .box {
+      max-width: 520px; border: 1px solid #ffffff33;
+      background: #0b1320e6; border-radius: 14px; padding: 18px 20px;
+    }
+    #rotateOverlay h2 { margin: 0 0 6px; font-size: 20px; }
+    #rotateOverlay p { margin: 6px 0 0; opacity: .9; }
+
+</style>
 </head>
 <body>
   <canvas id="game" width="1024" height="576"></canvas>
+  <div id="rotateOverlay" aria-live="polite" aria-hidden="true">
+    <div class="box">
+      <h2>Rotate to landscape to play</h2>
+      <p>This game needs landscape on mobile. Turn your phone sideways, then tap <strong>Fullscreen</strong> for the best view.</p>
+    </div>
+  </div>
+
   <div class="icon-row">
     <a class="icon-btn" href="settings.html" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -34,6 +59,18 @@
       </svg>
       <span>Settings</span>
     </a>
+  
+    <button id="btnFS" class="icon-btn" title="Fullscreen" aria-label="Fullscreen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="15 3 21 3 21 9"></polyline>
+        <polyline points="9 21 3 21 3 15"></polyline>
+        <line x1="21" y1="3" x2="14" y2="10"></line>
+        <line x1="3" y1="21" x2="10" y2="14"></line>
+      </svg>
+      <span>Fullscreen</span>
+    </button>
+
   </div>
 
   <!-- Load config first -->
@@ -43,6 +80,56 @@
 (()=>{
   // ===== Mobile detect =====
   const IS_MOBILE = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
+
+  // --- Mobile orientation block ---
+  let PORTRAIT_BLOCKED = false;
+  function updateOrientationBlock(){
+    const landscape = window.innerWidth >= window.innerHeight;
+    PORTRAIT_BLOCKED = IS_MOBILE && !landscape;
+    const el = document.getElementById('rotateOverlay');
+    if(el){ el.classList.toggle('show', PORTRAIT_BLOCKED); el.setAttribute('aria-hidden', PORTRAIT_BLOCKED ? 'false' : 'true'); }
+    try{ if(PORTRAIT_BLOCKED && state===STATE.RUN){ pause(); } }catch(_e){}
+  }
+  addEventListener('resize', updateOrientationBlock);
+  addEventListener('orientationchange', updateOrientationBlock);
+  document.addEventListener('DOMContentLoaded', updateOrientationBlock);
+  
+  // --- Fullscreen controls (with iOS/webkit fallbacks) ---
+  const fsBtn = document.getElementById('btnFS');
+  function isFullscreenActive(){
+    return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+  }
+  function updateFSUI(){
+    if(!fsBtn) return;
+    // Show "Fullscreen" button only on mobile and when not already fullscreen
+    fsBtn.style.display = (IS_MOBILE && !isFullscreenActive()) ? 'inline-flex' : 'none';
+  }
+  async function enterFullscreen(){
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if(req){
+      try{ await req.call(el); }
+      catch(err){
+        // iOS <16 or restricted context
+        alert('Fullscreen may not be supported by your browser. On iPhone, use Share → Add to Home Screen for a true full-screen experience.');
+      }
+    }else{
+      alert('Fullscreen is not available on this device/browser.');
+    }
+  }
+  if(fsBtn){
+    fsBtn.addEventListener('click', (e)=>{ e.preventDefault(); enterFullscreen().then(updateFSUI); });
+  }
+  document.addEventListener('fullscreenchange', updateFSUI);
+  document.addEventListener('webkitfullscreenchange', updateFSUI);
+  updateFSUI();
+
+  // --- Apply mascot scale from config.js and keep it in sync ---
+  function applyUserScaleToPlayers(){
+    const s = (Number.isFinite(CFG.mascot?.scale) ? CFG.mascot.scale : 1);
+    (players||[]).forEach(p=> p.USER_SCALE = s);
+  }
+
 
   // ===== Default to 1-Player on first load of a browser session =====
   try {
@@ -70,7 +157,8 @@
     world.seaLevel = vh * 0.58;
   }
   addEventListener('resize', resizeDPR);
-  addEventListener('focus', ()=>{ applyPlayerSelections(); });
+  addEventListener('focus', ()=>{ applyPlayerSelections();
+  applyUserScaleToPlayers(); });
   resizeDPR();
 
   // Config helpers
@@ -221,46 +309,86 @@
     if(e.code==='KeyD')INPUT[1].boost=false;
   });
 
-  // --- Mobile gestures (pointer events) ---
-  const touchPointers = new Map(); // id -> {y}
-  let upDownClearTimer=null;
-  const SWIPE_EPS = 6;        // px change to count as up/down
-  const CLEAR_AFTER = 160;    // ms to release up/down after last movement
+  
+  // --- Mobile drag-to-move (pointer events) ---
+  const touchPointers = new Map();
+  let draggingP1 = false;
+  let dragDX = 0, dragDY = 0;
 
-  function setP1(up,down){ INPUT[0].up=up; INPUT[0].down=down; }
-  function clearUpDownSoon(){
-    clearTimeout(upDownClearTimer);
-    upDownClearTimer = setTimeout(()=> setP1(false,false), CLEAR_AFTER);
+  function playerDrawBounds(p){
+    const img = (p && p.sprites && p.sprites.surfReady) ? p.sprites.surf : null;
+    const s = scaleFor('mascot', p.y, img, p.USER_SCALE);
+    const w = img ? img.width * s : 80;
+    const h = img ? img.height * s : 80;
+    const left = p.x - w*0.5;
+    const top  = p.y - h*0.78;
+    return {l:left, t:top, r:left+w, b:top+h, w, h};
+  }
+
+  function clampPosForPlayer(p, x, y){
+    const img = (p && p.sprites && p.sprites.surfReady) ? p.sprites.surf : null;
+    const s = scaleFor('mascot', p.y, img, p.USER_SCALE);
+    const hw = img ? (img.width * s) * 0.5 : 40;
+    const hh = img ? (img.height * s) * 0.5 : 40;
+    const pH = img ? (img.height * s) : (hh*2);
+    const topOffset = pH * 0.78;
+    const topPx = topLimitPx(), botPx = bottomLimitPx();
+    const minY = Math.max(hh, topPx + topOffset);
+    const maxY = Math.min(vh - hh, botPx - hh);
+    const minX = hw;
+    const maxX = vw - hw;
+    x = Math.max(minX, Math.min(maxX, x));
+    y = Math.max(minY, Math.min(maxY, y));
+    return {x, y};
   }
 
   function onPointerDown(e){
     if(e.pointerType!=='touch' && !IS_MOBILE) return;
     e.preventDefault();
-    touchPointers.set(e.pointerId, { y:e.clientY });
-    INPUT[0].boost = true;         // tap/hold = accelerate
-    // Start or resume via tap on mobile
+    if(PORTRAIT_BLOCKED) return;
+
+    const p = players[0];
+    if(!p){ return; }
+
+    // Tap to start/resume if not running
     if(IS_MOBILE && (state===STATE.MENU || state===STATE.OVER)){ start(); }
-    if(IS_MOBILE && state===STATE.PAUSE){ resume(); }
+    else if(IS_MOBILE && state===STATE.PAUSE){ resume(); }
+
+    // Begin drag if the touch is on the mascot
+    const rect = playerDrawBounds(p);
+    const x = e.clientX, y = e.clientY;
+    if(x>=rect.l && x<=rect.r && y>=rect.t && y<=rect.b){
+      draggingP1 = true;
+      p.isDragging = true;
+      dragDX = x - p.x; dragDY = y - p.y;
+      p.boost = 0; INPUT[0].up=false; INPUT[0].down=false;
+    }
+    touchPointers.set(e.pointerId, { });
   }
   function onPointerMove(e){
+    if(!IS_MOBILE) return;
     if(!touchPointers.has(e.pointerId)) return;
-    e.preventDefault();
-    const rec = touchPointers.get(e.pointerId);
-    const dy = e.clientY - rec.y;
-    if(Math.abs(dy) > SWIPE_EPS){
-      if(dy < 0)      setP1(true,false);
-      else if(dy > 0) setP1(false,true);
-      rec.y = e.clientY; // re-baseline so small continuous swipes work
-      clearUpDownSoon();
+    const p = players[0];
+    if(!p) return;
+    if(PORTRAIT_BLOCKED) return;
+    if(draggingP1 && p.isDragging){
+      e.preventDefault();
+      const x = e.clientX - dragDX;
+      const y = e.clientY - dragDY;
+      const cl = clampPosForPlayer(p, x, y);
+      p.x = cl.x; p.y = cl.y;
+      p.vy = 0; p.boost = 0;
     }
   }
   function onPointerUp(e){
     if(!touchPointers.has(e.pointerId)) return;
-    e.preventDefault();
     touchPointers.delete(e.pointerId);
-    if(touchPointers.size===0){
-      INPUT[0].boost=false;
-      clearUpDownSoon(); // let momentum settle, then release
+    const p = players[0];
+    if(p){
+      p.isDragging = false;
+      draggingP1 = false;
+      // let angle settle back quickly
+      p.roll = 0;
     }
   }
   // Attach to canvas only
@@ -274,7 +402,7 @@
   canvas.addEventListener('gesturechange', e=>e.preventDefault());
   canvas.addEventListener('gestureend', e=>e.preventDefault());
 
-  function installMascotFallback(img, name, kind, primary){
+function installMascotFallback(img, name, kind, primary){
     const cands=[];
     const names=[name, (name==='Pineapple'?'Pinapple':null)].filter(Boolean);
     for(const nm of names){
@@ -306,12 +434,18 @@
   }
 
   class Player{
-    constructor(index,name){ this.index=index; this.name=name; this.sprites=new SpritePair(name); this.boost=0; this.alive=true; this.USER_SCALE=1; this.reset(); }
+    constructor(index,name){ this.index=index; this.name=name; this.sprites=new SpritePair(name); this.boost=0; this.alive=true; this.USER_SCALE=1; this.isDragging=false; this.dragTargetX=0; this.dragTargetY=0; this.reset(); }
     reset(){ this.baseX = vw * (this.index===0 ? 0.22 : 0.18); this.x=this.baseX; this.y=world.seaLevel - (this.index===0?30:60); this.vy=0; this.r=16; this.roll=0; this.pumpPhase=0; this.alive=true; }
     revive(){ this.reset(); }
     setMascot(name){ this.name=name; this.sprites=new SpritePair(name); }
-    update(dt){
-      if(!this.alive) return;
+    update(dt){ if(!this.alive) return;
+      if(this.isDragging){
+        const cl = clampPosForPlayer(this, this.dragTargetX ?? this.x, this.dragTargetY ?? this.y);
+        this.x = cl.x; this.y = cl.y;
+        this.vy = 0; this.boost = 0;
+        this.roll += (0 - this.roll) * dt * 8;
+        return;
+      }
       const accel=Number.isFinite(CFG.boost?.accel)?CFG.boost.accel:0.20;
       const decay=Number.isFinite(CFG.boost?.decay)?CFG.boost.decay:0.30;
       const pressed=INPUT[this.index].boost;
@@ -547,9 +681,10 @@
     }
   }
   applyPlayerSelections();
-  window.addEventListener('storage', ()=>{
+  window.addEventListener('storage', (e)=>{
     players[0]?.setMascot(selectedFor(0));
     if(players[1]) players[1].setMascot(selectedFor(1));
+    if(e.key==='mascotScale'){ const v=parseFloat(localStorage.getItem('mascotScale')); if(Number.isFinite(v)){ CFG.mascot = CFG.mascot||{}; CFG.mascot.scale=v; applyUserScaleToPlayers(); } }
   });
 
   const obstacles=[]; let spawnTimer=0;
@@ -723,186 +858,5 @@
   requestAnimationFrame(loop);
 })();
 </script>
-
-  <!-- Mobile & Scale Enhancements -->
-  <style>
-    #rotateOverlay {
-      position: fixed; inset: 0; display: none;
-      align-items: center; justify-content: center; text-align: center;
-      background: rgba(11,19,32,0.96); color: #e8f1ff; z-index: 1000;
-      padding: 24px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    }
-    #rotateOverlay .box{
-      max-width: 520px; border:1px solid #ffffff22; border-radius:16px; padding:20px 18px; background:#0f233caa; backdrop-filter: blur(6px);
-    }
-    #fsBtn { display:none; }
-    @media (pointer: coarse) {
-      #fsBtn {
-        display:inline-flex; align-items:center; gap:8px;
-        border-radius:12px; border:1px solid #ffffff22; padding:8px 10px;
-        background:#0f233caa; color:#e8f1ff; font-weight:700; cursor:pointer;
-      }
-    }
-  </style>
-  <div id="rotateOverlay"><div class="box">
-    <div style="font-size:20px; font-weight:800; margin-bottom:8px;">Rotate to landscape</div>
-    <div>For the best experience, play in landscape mode. Please rotate your device.</div>
-  </div></div>
-  <script>
-  (function(){
-    const canvas = document.getElementById('game');
-    const IS_MOBILE = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const dpr = () => (window.devicePixelRatio || 1);
-    function isLandscape(){ return window.innerWidth > window.innerHeight; }
-
-    // Attach a Fullscreen button into the existing icon row (top-right)
-    let row = document.querySelector('.icon-row');
-    if(!row){
-      row = document.createElement('div');
-      row.className = 'icon-row';
-      row.style.position = 'fixed'; row.style.top = '12px'; row.style.right = '12px'; row.style.zIndex = '20'; row.style.display='flex'; row.style.gap='10px';
-      document.body.appendChild(row);
-    }
-    const fsBtn = document.createElement('button');
-    fsBtn.id = 'fsBtn';
-    fsBtn.type = 'button';
-    fsBtn.title = 'Fullscreen';
-    fsBtn.textContent = 'Fullscreen';
-    row.appendChild(fsBtn);
-
-    function inFullscreen(){
-      return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
-    }
-    function requestFS(){
-      const el = document.documentElement;
-      const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-      if(req){ try{ req.call(el); }catch(e){ console.warn('Fullscreen failed', e); } }
-    }
-    function exitFS(){
-      const ex = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-      if(ex){ ex.call(document); }
-    }
-    function refreshFSButton(){
-      if(!IS_MOBILE){ fsBtn.style.display='none'; return; }
-      fsBtn.style.display = isLandscape() && !inFullscreen() ? 'inline-flex' : 'none';
-    }
-    fsBtn.addEventListener('click', requestFS);
-    document.addEventListener('fullscreenchange', refreshFSButton);
-    window.addEventListener('orientationchange', refreshFSButton);
-    window.addEventListener('resize', refreshFSButton);
-    refreshFSButton();
-
-    // Orientation overlay block
-    const overlay = document.getElementById('rotateOverlay');
-    function updateOrientationOverlay(){
-      if(IS_MOBILE && !isLandscape()){
-        overlay.style.display = 'flex';
-        // Block all input while shown
-        overlay.style.pointerEvents = 'auto';
-      }else{
-        overlay.style.display = 'none';
-        overlay.style.pointerEvents = 'none';
-      }
-    }
-    window.addEventListener('resize', updateOrientationOverlay);
-    window.addEventListener('orientationchange', updateOrientationOverlay);
-    document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') updateOrientationOverlay(); });
-    updateOrientationOverlay();
-
-    // CONFIG-INTEGRATED MASCOT SCALE
-    const CFG = window.SURFLIME_CONFIG || {};
-    function applyScaleToPlayers(){
-      const v = Number(CFG?.mascot?.scale ?? parseFloat(localStorage.getItem('mascotScale')) ?? 1);
-      if(Array.isArray(window.players)){
-        window.players.forEach(p => { if(p) p.USER_SCALE = v; });
-      }
-    }
-    // Apply on start
-    applyScaleToPlayers();
-    // Keep in sync if settings change elsewhere
-    window.addEventListener('storage', (e)=>{
-      if(e.key === 'mascotScale'){ applyScaleToPlayers(); }
-    });
-    // Also guard: when players are created later
-    if(window.Player && window.Player.prototype){
-      const _reset = window.Player.prototype.reset;
-      if(typeof _reset === 'function'){
-        window.Player.prototype.reset = function(){
-          const r = _reset.apply(this, arguments);
-          // Re-apply scale after reset
-          this.USER_SCALE = Number(CFG?.mascot?.scale ?? parseFloat(localStorage.getItem('mascotScale')) ?? 1);
-          return r;
-        }
-      }
-    }
-
-    // MOBILE DRAG-TO-MOVE (P1 follows your finger)
-    if(IS_MOBILE && canvas){
-      // Disable any previous swipe handlers by stopping propagation
-      const stop = (e)=>{ /* keep default prevention light; we only prevent for move */
-        // e.stopImmediatePropagation(); e.stopPropagation();
-      };
-      canvas.addEventListener('touchstart', stop, {passive:true, capture:false});
-
-      function clientToCanvas(cx, cy){
-        const rect = canvas.getBoundingClientRect();
-        const x = (cx - rect.left) * (canvas.width / rect.width);
-        const y = (cy - rect.top)  * (canvas.height / rect.height);
-        return {x, y};
-      }
-      function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
-      function topLimitPx(){
-        const p = (CFG.limits?.topPercent ?? 0.42);
-        return (window.vh||canvas.height) * Math.min(0.98, Math.max(0, p));
-      }
-      function bottomLimitPx(){
-        const p = (CFG.limits?.bottomPercent ?? 0.98);
-        const vh = (window.vh||canvas.height);
-        const desiredPx = vh * Math.min(0.999, Math.max(0, p));
-        return Math.min(vh * 0.999, Math.max(0, desiredPx));
-      }
-      function scaleFor(kind,y,img,userScale){
-        // Fallback if host didn't define it
-        const base = 0.18;
-        const mul = 1.0;
-        return base * (userScale || 1) * mul;
-      }
-      let dragging=false, dragP=null, dragOff={x:0,y:0};
-
-      canvas.addEventListener('touchstart', (ev)=>{
-        if(!isLandscape()){ updateOrientationOverlay(); return; }
-        const p1 = (window.players && window.players[0]) || null;
-        if(!p1) return;
-        const t = ev.touches[0];
-        const pos = clientToCanvas(t.clientX, t.clientY);
-        const img = p1.sprites && p1.sprites.surf || null;
-        const userScale = p1.USER_SCALE || 1;
-        const sc = (window.scaleFor || scaleFor)('mascot', p1.y, img, userScale);
-        const hw = (img ? img.width : 80) * sc * 0.5;
-        const hh = (img ? img.height: 80) * sc * 0.5;
-        if(pos.x >= p1.x - hw && pos.x <= p1.x + hw && pos.y >= p1.y - hh && pos.y <= p1.y + hh){
-          dragging = true; dragP = p1;
-          dragOff.x = p1.x - pos.x; dragOff.y = p1.y - pos.y;
-        }
-      }, {passive:true});
-
-      canvas.addEventListener('touchmove', (ev)=>{
-        if(!dragging || !dragP) return;
-        ev.preventDefault();
-        const t = ev.touches[0];
-        const pos = clientToCanvas(t.clientX, t.clientY);
-        const vw = (window.vw||canvas.width), vh = (window.vh||canvas.height);
-        const nx = clamp(pos.x + dragOff.x, 20, vw-20);
-        const ny = clamp(pos.y + dragOff.y, topLimitPx()+20, bottomLimitPx()-20);
-        dragP.x = nx; dragP.y = ny;
-        dragP.vy = 0; // cancel vertical momentum while dragging
-      }, {passive:false});
-
-      canvas.addEventListener('touchend', ()=>{ dragging=false; dragP=null; }, {passive:true});
-      canvas.addEventListener('touchcancel', ()=>{ dragging=false; dragP=null; }, {passive:true});
-    }
-  })();
-  </script>
-
 </body>
 </html>
