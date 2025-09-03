@@ -7,7 +7,7 @@
   // ---- Defaults (used if nothing in localStorage) ----
   const DEFAULTS = {
     mascot: {
-      scale: 1,          // 1.00 = original artwork size  (kept)
+      scale: 1.00,          // 1.00 = original artwork size  (kept)
       selected: "Lime"     // starter mascot if none chosen yet  (kept)
     },
     // Depth perception scaling (used by main.html for y-based size)
@@ -123,4 +123,21 @@
       if (n) window.SURFLIME_CONFIG.mascot.selected = n;
     }
   });
+})();
+
+// --- Mobile scaling defaults (added) ---
+// Adds optional per-platform scaling knobs. If not set, fall back to desktop values.
+;(function(){
+  try{
+    const C = (window.SURFLIME_CONFIG = window.SURFLIME_CONFIG || {});
+    C.mascot = C.mascot || {};
+    C.obstacle = C.obstacle || {};
+    if (!Number.isFinite(C.mascot.scaleMobile)) {
+      C.mascot.scaleMobile = Number.isFinite(C.mascot.scale) ? C.mascot.scale : .85;
+    }
+    if (!Number.isFinite(C.obstacle.scalePercentMobile)) {
+      const base = Number.isFinite(C.obstacle.scalePercent) ? C.obstacle.scalePercent : 85;
+      C.obstacle.scalePercentMobile = base;
+    }
+  }catch(e){}
 })();

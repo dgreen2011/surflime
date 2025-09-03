@@ -70,7 +70,9 @@
 
   // --- Apply mascot scale from config.js and keep it in sync ---
   function applyUserScaleToPlayers(){
-    const s = (Number.isFinite(CFG.mascot?.scale) ? CFG.mascot.scale : 1);
+    const desktop = Number.isFinite(CFG.mascot?.scale) ? CFG.mascot.scale : 1;
+    const mobile  = Number.isFinite(CFG.mascot?.scaleMobile) ? CFG.mascot.scaleMobile : desktop;
+    const s = IS_MOBILE ? mobile : desktop;
     (players||[]).forEach(p=> p.USER_SCALE = s);
   }
 
@@ -116,7 +118,9 @@
     return Math.min(vh * 0.999, Math.max(topLimitPx() + 0.02*vh, desiredPx));
   }
   function obstacleScaleMul(){
-    const p = Number.isFinite(CFG.obstacle?.scalePercent) ? CFG.obstacle.scalePercent : 100;
+    const desk = Number.isFinite(CFG.obstacle?.scalePercent) ? CFG.obstacle.scalePercent : 100;
+    const mobi = Number.isFinite(CFG.obstacle?.scalePercentMobile) ? CFG.obstacle.scalePercentMobile : desk;
+    const p = IS_MOBILE ? mobi : desk;
     return Math.max(0.1, Math.min(3, p / 100));
   }
   function depthMul(kind,y){
@@ -572,7 +576,8 @@ function installMascotFallback(img, name, kind, primary){
     }
   }
   applyPlayerSelections();
-  applyUserScaleToPlayers();
+  applyUserScaleToPlayers(); // ensure initial scale is applied
+
   window.addEventListener('storage', (e)=>{
     players[0]?.setMascot(selectedFor(0));
     if(players[1]) players[1].setMascot(selectedFor(1));
@@ -584,7 +589,8 @@ function installMascotFallback(img, name, kind, primary){
     obstacles.length=0; spawnTimer=0; levelElapsed=0;
     activeObstacleSprites.clear(); applyPlayerSelections();
     players.forEach(p=>p.revive());
-    applyUserScaleToPlayers();
+    applyUserScaleToPlayers(); // keep scale after reset
+
   }
   function maybeSpawn(dt){
     spawnTimer-=dt;
