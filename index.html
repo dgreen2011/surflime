@@ -22,35 +22,10 @@
     }
     .icon-btn:hover{ background:#122c4bee }
     .icon-btn svg{ width:20px; height:20px }
-  
-    /* Rotate-to-landscape overlay */
-    #rotateOverlay {
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,0.86);
-      color: #fff; display: none;
-      align-items: center; justify-content: center;
-      text-align: center; padding: 24px; z-index: 30;
-      font: 600 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-    }
-    #rotateOverlay.show { display: flex; }
-    #rotateOverlay .box {
-      max-width: 520px; border: 1px solid #ffffff33;
-      background: #0b1320e6; border-radius: 14px; padding: 18px 20px;
-    }
-    #rotateOverlay h2 { margin: 0 0 6px; font-size: 20px; }
-    #rotateOverlay p { margin: 6px 0 0; opacity: .9; }
-
-</style>
+  </style>
 </head>
 <body>
   <canvas id="game" width="1024" height="576"></canvas>
-  <div id="rotateOverlay" aria-live="polite" aria-hidden="true">
-    <div class="box">
-      <h2>Rotate to landscape to play</h2>
-      <p>This game needs landscape on mobile. Turn your phone sideways, then tap <strong>Fullscreen</strong> for the best view.</p>
-    </div>
-  </div>
-
   <div class="icon-row">
     <a class="icon-btn" href="settings.html" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -59,18 +34,6 @@
       </svg>
       <span>Settings</span>
     </a>
-  
-    <button id="btnFS" class="icon-btn" title="Fullscreen" aria-label="Fullscreen">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <polyline points="15 3 21 3 21 9"></polyline>
-        <polyline points="9 21 3 21 3 15"></polyline>
-        <line x1="21" y1="3" x2="14" y2="10"></line>
-        <line x1="3" y1="21" x2="10" y2="14"></line>
-      </svg>
-      <span>Fullscreen</span>
-    </button>
-
   </div>
 
   <!-- Load config first -->
@@ -80,49 +43,6 @@
 (()=>{
   // ===== Mobile detect =====
   const IS_MOBILE = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
-
-  // --- Mobile orientation block ---
-  let PORTRAIT_BLOCKED = false;
-  function updateOrientationBlock(){
-    const landscape = window.innerWidth >= window.innerHeight;
-    PORTRAIT_BLOCKED = IS_MOBILE && !landscape;
-    const el = document.getElementById('rotateOverlay');
-    if(el){ el.classList.toggle('show', PORTRAIT_BLOCKED); el.setAttribute('aria-hidden', PORTRAIT_BLOCKED ? 'false' : 'true'); }
-    try{ if(PORTRAIT_BLOCKED && state===STATE.RUN){ pause(); } }catch(_e){}
-  }
-  addEventListener('resize', updateOrientationBlock);
-  addEventListener('orientationchange', updateOrientationBlock);
-  document.addEventListener('DOMContentLoaded', updateOrientationBlock);
-  
-  // --- Fullscreen controls (with iOS/webkit fallbacks) ---
-  const fsBtn = document.getElementById('btnFS');
-  function isFullscreenActive(){
-    return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
-  }
-  function updateFSUI(){
-    if(!fsBtn) return;
-    // Show "Fullscreen" button only on mobile and when not already fullscreen
-    fsBtn.style.display = (IS_MOBILE && !isFullscreenActive()) ? 'inline-flex' : 'none';
-  }
-  async function enterFullscreen(){
-    const el = document.documentElement;
-    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-    if(req){
-      try{ await req.call(el); }
-      catch(err){
-        // iOS <16 or restricted context
-        alert('Fullscreen may not be supported by your browser. On iPhone, use Share → Add to Home Screen for a true full-screen experience.');
-      }
-    }else{
-      alert('Fullscreen is not available on this device/browser.');
-    }
-  }
-  if(fsBtn){
-    fsBtn.addEventListener('click', (e)=>{ e.preventDefault(); enterFullscreen().then(updateFSUI); });
-  }
-  document.addEventListener('fullscreenchange', updateFSUI);
-  document.addEventListener('webkitfullscreenchange', updateFSUI);
-  updateFSUI();
 
   // --- Apply mascot scale from config.js and keep it in sync ---
   function applyUserScaleToPlayers(){
@@ -310,85 +230,45 @@
   });
 
   
-  // --- Mobile drag-to-move (pointer events) ---
-  const touchPointers = new Map();
-  let draggingP1 = false;
-  let dragDX = 0, dragDY = 0;
+  // --- Mobile gestures (pointer events) ---
+  // Simplified: swipe up => move up, swipe down => move down. No boost on mobile.
+  const touchPointers = new Map(); // id -> {y}
+  let upDownClearTimer=null;
+  const SWIPE_EPS = 6;        // px change to count as up/down
+  const CLEAR_AFTER = 160;    // ms to release up/down after last movement
 
-  function playerDrawBounds(p){
-    const img = (p && p.sprites && p.sprites.surfReady) ? p.sprites.surf : null;
-    const s = scaleFor('mascot', p.y, img, p.USER_SCALE);
-    const w = img ? img.width * s : 80;
-    const h = img ? img.height * s : 80;
-    const left = p.x - w*0.5;
-    const top  = p.y - h*0.78;
-    return {l:left, t:top, r:left+w, b:top+h, w, h};
-  }
-
-  function clampPosForPlayer(p, x, y){
-    const img = (p && p.sprites && p.sprites.surfReady) ? p.sprites.surf : null;
-    const s = scaleFor('mascot', p.y, img, p.USER_SCALE);
-    const hw = img ? (img.width * s) * 0.5 : 40;
-    const hh = img ? (img.height * s) * 0.5 : 40;
-    const pH = img ? (img.height * s) : (hh*2);
-    const topOffset = pH * 0.78;
-    const topPx = topLimitPx(), botPx = bottomLimitPx();
-    const minY = Math.max(hh, topPx + topOffset);
-    const maxY = Math.min(vh - hh, botPx - hh);
-    const minX = hw;
-    const maxX = vw - hw;
-    x = Math.max(minX, Math.min(maxX, x));
-    y = Math.max(minY, Math.min(maxY, y));
-    return {x, y};
+  function setP1(up,down){ INPUT[0].up=up; INPUT[0].down=down; }
+  function clearUpDownSoon(){
+    clearTimeout(upDownClearTimer);
+    upDownClearTimer = setTimeout(()=> setP1(false,false), CLEAR_AFTER);
   }
 
   function onPointerDown(e){
     if(e.pointerType!=='touch' && !IS_MOBILE) return;
     e.preventDefault();
-    if(PORTRAIT_BLOCKED) return;
-
-    const p = players[0];
-    if(!p){ return; }
-
-    // Tap to start/resume if not running
+    touchPointers.set(e.pointerId, { y:e.clientY });
+    // Tap to start/resume on mobile
     if(IS_MOBILE && (state===STATE.MENU || state===STATE.OVER)){ start(); }
-    else if(IS_MOBILE && state===STATE.PAUSE){ resume(); }
-
-    // Begin drag if the touch is on the mascot
-    const rect = playerDrawBounds(p);
-    const x = e.clientX, y = e.clientY;
-    if(x>=rect.l && x<=rect.r && y>=rect.t && y<=rect.b){
-      draggingP1 = true;
-      p.isDragging = true;
-      dragDX = x - p.x; dragDY = y - p.y;
-      p.boost = 0; INPUT[0].up=false; INPUT[0].down=false;
-    }
-    touchPointers.set(e.pointerId, { });
+    if(IS_MOBILE && state===STATE.PAUSE){ resume(); }
   }
   function onPointerMove(e){
-    if(!IS_MOBILE) return;
     if(!touchPointers.has(e.pointerId)) return;
-    const p = players[0];
-    if(!p) return;
-    if(PORTRAIT_BLOCKED) return;
-    if(draggingP1 && p.isDragging){
-      e.preventDefault();
-      const x = e.clientX - dragDX;
-      const y = e.clientY - dragDY;
-      const cl = clampPosForPlayer(p, x, y);
-      p.x = cl.x; p.y = cl.y;
-      p.vy = 0; p.boost = 0;
+    e.preventDefault();
+    const rec = touchPointers.get(e.pointerId);
+    const dy = e.clientY - rec.y;
+    if(Math.abs(dy) > SWIPE_EPS){
+      if(dy < 0)      setP1(true,false);
+      else if(dy > 0) setP1(false,true);
+      rec.y = e.clientY;
+      clearUpDownSoon();
     }
   }
   function onPointerUp(e){
     if(!touchPointers.has(e.pointerId)) return;
+    e.preventDefault();
     touchPointers.delete(e.pointerId);
-    const p = players[0];
-    if(p){
-      p.isDragging = false;
-      draggingP1 = false;
-      // let angle settle back quickly
-      p.roll = 0;
+    if(touchPointers.size===0){
+      clearUpDownSoon();
     }
   }
   // Attach to canvas only
@@ -401,7 +281,6 @@
   canvas.addEventListener('gesturestart', e=>e.preventDefault());
   canvas.addEventListener('gesturechange', e=>e.preventDefault());
   canvas.addEventListener('gestureend', e=>e.preventDefault());
-
 function installMascotFallback(img, name, kind, primary){
     const cands=[];
     const names=[name, (name==='Pineapple'?'Pinapple':null)].filter(Boolean);
@@ -434,18 +313,12 @@ function installMascotFallback(img, name, kind, primary){
   }
 
   class Player{
-    constructor(index,name){ this.index=index; this.name=name; this.sprites=new SpritePair(name); this.boost=0; this.alive=true; this.USER_SCALE=1; this.isDragging=false; this.dragTargetX=0; this.dragTargetY=0; this.reset(); }
+    constructor(index,name){ this.index=index; this.name=name; this.sprites=new SpritePair(name); this.boost=0; this.alive=true; this.USER_SCALE=1; this.reset(); }
     reset(){ this.baseX = vw * (this.index===0 ? 0.22 : 0.18); this.x=this.baseX; this.y=world.seaLevel - (this.index===0?30:60); this.vy=0; this.r=16; this.roll=0; this.pumpPhase=0; this.alive=true; }
     revive(){ this.reset(); }
     setMascot(name){ this.name=name; this.sprites=new SpritePair(name); }
-    update(dt){ if(!this.alive) return;
-      if(this.isDragging){
-        const cl = clampPosForPlayer(this, this.dragTargetX ?? this.x, this.dragTargetY ?? this.y);
-        this.x = cl.x; this.y = cl.y;
-        this.vy = 0; this.boost = 0;
-        this.roll += (0 - this.roll) * dt * 8;
-        return;
-      }
+    update(dt){
+      if(!this.alive) return;
       const accel=Number.isFinite(CFG.boost?.accel)?CFG.boost.accel:0.20;
       const decay=Number.isFinite(CFG.boost?.decay)?CFG.boost.decay:0.30;
       const pressed=INPUT[this.index].boost;
@@ -522,7 +395,7 @@ function installMascotFallback(img, name, kind, primary){
     constructor(){
       const haveLTR=imagesLTR.length>0, haveRTL=imagesRTL.length>0;
       if(!haveLTR && !haveRTL){ this.valid=false; return; }
-      this.dir = (haveLTR && haveRTL) ? (Math.random()<0.7 ? 'rtl' : 'ltr') : (haveRTL?'rtl':'ltr');
+      this.dir = IS_MOBILE ? 'rtl' : ((haveLTR && haveRTL) ? (Math.random()<0.7 ? 'rtl' : 'ltr') : (haveRTL?'rtl':'ltr'));
       this.img = nextImageFor(this.dir); if(!this.img){ this.valid=false; return; }
       activeObstacleSprites.add(this.img.src);
 
@@ -727,6 +600,7 @@ function installMascotFallback(img, name, kind, primary){
 
   // Background + readable overlays
   const doho=new Image(); let dohoReady=false; doho.onload=()=>dohoReady=true; doho.src='./Background/Doho.png';
+  
   function drawBG(ctx,w,h,t){
     if(dohoReady){
       const iw=doho.width, ih=doho.height;
@@ -738,19 +612,28 @@ function installMascotFallback(img, name, kind, primary){
         { sy:Math.floor(ih*.42), sh:Math.floor(ih*.38), dy:midDY,  dh:midDH,  speed:30 },
         { sy:Math.floor(ih*.80), sh:Math.floor(ih*.20), dy:sandDY, dh:sandDH, speed:30 }
       ];
+      const PORTRAIT = IS_MOBILE && (window.innerHeight > window.innerWidth);
       for(const L of layers){
-        const sx=Math.floor((t*L.speed)%iw);
-        const sw1=iw-sx; const dw1=Math.floor(w*(sw1/iw));
-        if(sw1>0){ ctx.drawImage(doho, sx, L.sy, sw1, L.sh, 0, L.dy, dw1, L.dh); }
-        const sw2=sx, dw2=w-dw1;
-        if(sw2>0&&dw2>0){ ctx.drawImage(doho, 0, L.sy, sw2, L.sh, dw1, L.dy, dw2, L.dh); }
+        if(PORTRAIT){
+          const s = L.dh / L.sh;
+          const tileW = Math.max(1, Math.floor(iw * s));
+          const offsetPx = Math.floor((t * L.speed * s) % tileW);
+          let x = -offsetPx;
+          for(; x < w; x += tileW){
+            ctx.drawImage(doho, 0, L.sy, iw, L.sh, x, L.dy, tileW, L.dh);
+          }
+          // also draw one tile to the left to cover any gap
+          ctx.drawImage(doho, 0, L.sy, iw, L.sh, x - tileW, L.dy, tileW, L.dh);
+        } else {
+          const sx=Math.floor((t*L.speed)%iw);
+          const sw1=iw-sx; const dw1=Math.floor(w*(sw1/iw));
+          if(sw1>0){ ctx.drawImage(doho, sx, L.sy, sw1, L.sh, 0, L.dy, dw1, L.dh); }
+          const sw2=sx; const dw2=w-dw1; if(sw2>0){ ctx.drawImage(doho, 0, L.sy, sw2, L.sh, dw1, L.dy, dw2, L.dh); }
+        }
       }
-      return;
     }
-    const grad=ctx.createLinearGradient(0,world.seaLevel-100,0,h);
-    grad.addColorStop(0,'#1875c2'); grad.addColorStop(1,'#0d467b');
-    ctx.fillStyle=grad; ctx.fillRect(0,world.seaLevel-100,w,h-(world.seaLevel-100));
   }
+
 
   function roundRectPath(ctx, x, y, w, h, r){
     ctx.beginPath();
