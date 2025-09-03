@@ -133,10 +133,10 @@
     C.mascot = C.mascot || {};
     C.obstacle = C.obstacle || {};
     if (!Number.isFinite(C.mascot.scaleMobile)) {
-      C.mascot.scaleMobile = Number.isFinite(C.mascot.scale) ? C.mascot.scale : .85;
+      C.mascot.scaleMobile = Number.isFinite(C.mascot.scale) ? C.mascot.scale : .50;
     }
     if (!Number.isFinite(C.obstacle.scalePercentMobile)) {
-      const base = Number.isFinite(C.obstacle.scalePercent) ? C.obstacle.scalePercent : 85;
+      const base = Number.isFinite(C.obstacle.scalePercent) ? C.obstacle.scalePercent : 50;
       C.obstacle.scalePercentMobile = base;
     }
   }catch(e){}
