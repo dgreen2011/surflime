@@ -167,12 +167,3 @@
 </script>
 </body>
 </html>
-
-<script>
-  (function(){
-    const a = document.getElementById('btnBackToGame');
-    if(a){
-      a.addEventListener('click', ()=>{ try{ sessionStorage.setItem('SL_RESUME_READY','1'); }catch{} }, {passive:true});
-    }
-  })();
-</script>
