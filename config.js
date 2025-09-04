@@ -90,8 +90,8 @@
     // Example: obstacle 15% desktop with 20 below -> mobile obstacle = 12%
     mobile: {
       scaleDownPercent: {
-        mascot: 15,     // shrink mascot by X% on mobile vs desktop
-        obstacle: 15    // shrink obstacle percent by X% on mobile vs desktop
+        mascot: 25,     // shrink mascot by X% on mobile vs desktop
+        obstacle: 25    // shrink obstacle percent by X% on mobile vs desktop
       }
     }
   };
