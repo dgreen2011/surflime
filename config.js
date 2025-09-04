@@ -1,8 +1,8 @@
 /**
  * Surf Lime Config
- * - Supabase music source
- * - Mobile shrink-by-percent knobs
- * - Mobile hold-to-rise tuning, including base offset from bottom
+ * - Adds Supabase music source (public bucket)
+ * - Adds mobile scale-down-by-percent knobs (mascot/obstacle)
+ * - Keeps existing behavior if new settings are not provided.
  */
 (function () {
   const savedScale  = parseFloat(localStorage.getItem("mascotScale"));
@@ -16,6 +16,7 @@
   window.SURFLIME_CONFIG = {
     level: { seconds: 30 },
 
+    // Obstacle scale on desktop (% of native artwork)
     obstacle: { scalePercent: 15 },
 
     limits: { topPercent: 0.20, bottomPercent: 0.80 },
@@ -28,6 +29,7 @@
 
     audio: { wavesVolume: 0.25 },
 
+    // Depth-based scaling
     depth: {
       mascot:   { topScale: 0.90, bottomScale: 1.05 },
       obstacle: { topScale: 0.85, bottomScale: 1.10 }
@@ -54,20 +56,15 @@
       }
     },
 
+    // NEW: Mobile shrink-by-percent (applied on top of desktop values)
     mobile: {
-      // Shrink-by-percent (relative to desktop)
-      scaleDownPercent: { mascot: 15, obstacle: 15 },
-
-      // Hold-to-rise tuning
-      holdRise: {
-        upAccel: 800,                 // upward acceleration while finger down
-        springK: 6.0,                 // pull-down strength when released
-        damping: 3.5,                 // damping factor (per second)
-        baseOffsetFromBottomPx: 18    // how far ABOVE the bottom bound to rest (increase to rest higher)
+      scaleDownPercent: {
+        mascot: 15,   // e.g., 15 -> render mascot at 85% of desktop size
+        obstacle: 15  // e.g., 15 -> render obstacles at 85% of desktop percent
       }
     },
 
-    // Supabase music source (public bucket)
+    // NEW: Supabase music source (public bucket). Enable + set your projectRef/bucket/files.
     music: {
       supabase: {
         enabled: true,
@@ -78,7 +75,7 @@
     }
   };
 
-  // Back-compat flags (prefer new shrink path)
+  // Keep backward compatibility flags (prefer new mobile.scaleDownPercent if present)
   (function(){
     try{
       const C = (window.SURFLIME_CONFIG = window.SURFLIME_CONFIG || {});
