@@ -1,104 +1,49 @@
-// Global config for Surf Lime
-// Percentages are from TOP (0) to BOTTOM (1) of the canvas.
-// Adds mascot configuration (scale + selected mascot) with localStorage persistence
-// and depth-based scaling controls for mascot & obstacles.
-
+/**
+ * Surf Lime Config
+ * - Adds Supabase music source (public bucket)
+ * - Adds mobile scale-down-by-percent knobs (mascot/obstacle)
+ * - Keeps existing behavior if new settings are not provided.
+ */
 (function () {
-  // ---- Defaults (used if nothing in localStorage) ----
-  const DEFAULTS = {
-    mascot: {
-      scale: 1.00,          // 1.00 = original artwork size  (kept)
-      selected: "Lime"     // starter mascot if none chosen yet  (kept)
-    },
-    // Depth perception scaling (used by main.html for y-based size)
-    depth: {
-      // At TOP limit => topScale; at BOTTOM limit => bottomScale
-      mascot:   { topScale: 0.90, bottomScale: 1.05 },
-      obstacle: { topScale: 0.85, bottomScale: 1.10 } // ← fixed comma & removed stray scalePercent
-    }
-  };
-
-  // ---- Load any saved user choices ----
   const savedScale  = parseFloat(localStorage.getItem("mascotScale"));
   const savedMascot = localStorage.getItem("selectedMascot");
 
-  // One-time migration from older misspelling
+  // Fix historical typo for Pineapple if present in storage
   ['selectedMascot','selectedMascotP1','selectedMascotP2'].forEach(k=>{
     if(localStorage.getItem(k)==='Pinapple'){ localStorage.setItem(k,'Pineapple'); }
   });
 
-  // ---- Export the unified config object ----
   window.SURFLIME_CONFIG = {
-    level: { seconds: 30 },  // seconds per level (used by main.html)
+    level: { seconds: 30 },
 
-    // Global obstacle scale: 100 = native size; 20 = 20% of native; 80 = 20% smaller.
+    // Obstacle scale on desktop (% of native artwork)
     obstacle: { scalePercent: 15 },
 
-    // How far up/down the lime & obstacles can go (as a fraction of canvas height)
-    limits: {
-      topPercent: 0.20,   // (kept)
-      bottomPercent: 0.80 // (kept)
-    },
+    limits: { topPercent: 0.20, bottomPercent: 0.80 },
 
-    // Collision tuning — lower portion of sprites is "active"
-    // 0.40 = lower 40%; 0.00 = nothing; 1.00 = full height.  (kept)
-    collision: {
-      limeLowerZone: 0.25,
-      obstacleLowerZone: 0.25
-    },
+    collision: { limeLowerZone: 0.25, obstacleLowerZone: 0.25 },
 
-    // Boost (Right Arrow) tuning  (kept)
-    boost: {
-      accel: 0.60,
-      decay: 0.40,
-      pushStrength: 1.00,
-      moveLerp: 1.00
-    },
+    boost: { accel: 0.60, decay: 0.40, pushStrength: 1.00, moveLerp: 1.00 },
 
-    // UI positions  (kept)
-    ui: {
-      levelBannerYPercent: 0.08
-    },
+    ui: { levelBannerYPercent: 0.08 },
 
-    // Audio controls
-    audio: {
-      // 0.0–1.0 volume for the background wave noise layered over music
-      wavesVolume: 0.25
-    },
+    audio: { wavesVolume: 0.25 },
 
-    // Depth perception scaling (used by main.html to scale with Y)
+    // Depth-based scaling
     depth: {
-      mascot: {
-        topScale:    DEFAULTS.depth.mascot.topScale,
-        bottomScale: DEFAULTS.depth.mascot.bottomScale
-      },
-      obstacle: {
-        topScale:    DEFAULTS.depth.obstacle.topScale,
-        bottomScale: DEFAULTS.depth.obstacle.bottomScale
-      }
+      mascot:   { topScale: 0.90, bottomScale: 1.05 },
+      obstacle: { topScale: 0.85, bottomScale: 1.10 }
     },
 
-    // Mascot config (size + selection)  (kept)
     mascot: {
-      // Current render scale (multiplier on sprite size)
-      scale: Number.isFinite(savedScale) ? savedScale : DEFAULTS.mascot.scale,
-
-      // Currently selected mascot name
-      selected: savedMascot || DEFAULTS.mascot.selected,
-
-      // Helper to build asset paths.
-      // Banana & Pineapple use "...Surfer.png", all others use "...Surf.png".
+      scale: Number.isFinite(savedScale) ? savedScale : 1.00,
+      selected: savedMascot || "Lime",
       assetsFor(name) {
         const n = name || this.selected;
         const SURFER = new Set(['Banana','Pineapple']);
         const base = `./Mascots/${n}/${n}`;
-        return {
-          surf: `${base}${SURFER.has(n) ? 'Surfer' : 'Surf'}.png`,
-          fall: `${base}Fall.png`
-        };
+        return { surf: `${base}${SURFER.has(n) ? 'Surfer' : 'Surf'}.png`, fall: `${base}Fall.png` };
       },
-
-      // Setters that also persist to localStorage (optional to use)
       setScale(v) {
         if (!Number.isFinite(v)) return;
         this.scale = v;
@@ -109,35 +54,45 @@
         this.selected = name;
         try { localStorage.setItem("selectedMascot", name); } catch {}
       }
+    },
+
+    // NEW: Mobile shrink-by-percent (applied on top of desktop values)
+    mobile: {
+      // Mobile-only: where the mascot 'rests' when not holding (distance above bottom bound)
+      holdRise: { baseOffsetFromBottomPx: 18 },
+      scaleDownPercent: {
+        mascot: 15,   // e.g., 15 -> render mascot at 85% of desktop size
+        obstacle: 15  // e.g., 15 -> render obstacles at 85% of desktop percent
+      }
+    },
+
+    // NEW: Supabase music source (public bucket). Enable + set your projectRef/bucket/files.
+    music: {
+      supabase: {
+        enabled: true,
+        projectRef: "iqzplffsjaopzspnbhok",
+        bucket: "Music",
+        files: ["Surfing1.wav","Surfing2.wav","Surfing3.wav","Surfing4.wav","Surfing5.wav"]
+      }
     }
   };
 
-  // Optional: if settings are changed in another tab, live-sync this tab’s config. (kept)
-  window.addEventListener("storage", (e) => {
-    if (e.key === "mascotScale") {
-      const v = parseFloat(localStorage.getItem("mascotScale"));
-      if (Number.isFinite(v)) window.SURFLIME_CONFIG.mascot.scale = v;
-    }
-    if (e.key === "selectedMascot") {
-      const n = localStorage.getItem("selectedMascot");
-      if (n) window.SURFLIME_CONFIG.mascot.selected = n;
-    }
-  });
-})();
+  // Keep backward compatibility flags (prefer new mobile.scaleDownPercent if present)
+  (function(){
+    try{
+      const C = (window.SURFLIME_CONFIG = window.SURFLIME_CONFIG || {});
+      C.mascot = C.mascot || {};
+      C.obstacle = C.obstacle || {};
+      if (!Number.isFinite(C.mascot.scaleMobile)) C.mascot.scaleMobile = undefined;
+      if (!Number.isFinite(C.obstacle.scalePercentMobile)) C.obstacle.scalePercentMobile = undefined;
+    }catch{}
+  })();
 
-// --- Mobile scaling defaults (added) ---
-// Adds optional per-platform scaling knobs. If not set, fall back to desktop values.
-;(function(){
-  try{
-    const C = (window.SURFLIME_CONFIG = window.SURFLIME_CONFIG || {});
-    C.mascot = C.mascot || {};
-    C.obstacle = C.obstacle || {};
-    if (!Number.isFinite(C.mascot.scaleMobile)) {
-      C.mascot.scaleMobile = Number.isFinite(C.mascot.scale) ? C.mascot.scale : .85;
-    }
-    if (!Number.isFinite(C.obstacle.scalePercentMobile)) {
-      const base = Number.isFinite(C.obstacle.scalePercent) ? C.obstacle.scalePercent : 85;
-      C.obstacle.scalePercentMobile = base;
-    }
-  }catch(e){}
-})();
+  // React to external storage changes
+  window.addEventListener("storage", () => {
+    const v = parseFloat(localStorage.getItem("mascotScale"));
+    if (Number.isFinite(v)) window.SURFLIME_CONFIG.mascot.scale = v;
+    const n = localStorage.getItem("selectedMascot");
+    if (n) window.SURFLIME_CONFIG.mascot.selected = n;
+  });
+})();    
