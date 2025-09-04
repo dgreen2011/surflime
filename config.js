@@ -2,6 +2,7 @@
  * Surf Lime Config
  * - Adds Supabase music source (public bucket)
  * - Adds mobile scale-down-by-percent knobs (mascot/obstacle)
+ * - Adds mobile motion knobs (rise/fall speed) for slower vertical movement
  * - Keeps existing behavior if new settings are not provided.
  */
 (function () {
@@ -60,6 +61,18 @@
     mobile: {
       // Mobile-only: where the mascot 'rests' when not holding (distance above bottom bound)
       holdRise: { baseOffsetFromBottomPx: 20 },
+
+      // NEW: Mobile motion (slower rise/fall by default; tweak as desired)
+      motion: {
+        // How strongly a hold/tap accelerates upward (px/s^2)
+        riseAccel: 650,      // default was ~800; lower = slower rise
+        // Spring strength pulling back to base when not holding
+        fallSpringK: 4.5,    // default was ~6.0; lower = slower return
+        // Damping applied each frame when not holding (multiplier per second)
+        // Used as (1 - fallDamping * dt) in code; lower = less damping
+        fallDamping: 2.5     // default was ~3.5
+      },
+
       scaleDownPercent: {
         mascot: 25,   // e.g., 15 -> render mascot at 85% of desktop size
         obstacle: 25  // e.g., 15 -> render obstacles at 85% of desktop percent
@@ -95,4 +108,4 @@
     const n = localStorage.getItem("selectedMascot");
     if (n) window.SURFLIME_CONFIG.mascot.selected = n;
   });
-})();    
+})();

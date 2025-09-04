@@ -55,7 +55,7 @@
     <a class="icon-btn" href="settings.html" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0A1.65 1.65 0 0 0 9 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82h0A1.65 1.65 0 0 0 20.91 11H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0 4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0A1.65 1.65 0 0 0 9 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82h0A1.65 1.65 0 0 0 20.91 11H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
       </svg>
       <span class="settings-label">Settings</span>
     </a>
@@ -101,10 +101,6 @@
       muteBtn.querySelector('span').textContent = muted ? 'Unmute' : 'Mute';
       muteBtn.title = muted ? 'Unmute' : 'Mute';
     }
-    if(muteBtn){
-      muteBtn.addEventListener('click',(e)=>{ e.preventDefault(); toggleMute(); updateMuteUI(); });
-      setTimeout(updateMuteUI, 0);
-    }
 
     // ----- Config helpers -----
     const CFG = window.SURFLIME_CONFIG || { };
@@ -121,7 +117,11 @@
     const TRACKS = getSupabaseMusicUrls() || ['./Music/Surfing.mp3','./Music/Surfing2.mp3','./Music/Surfing3.mp3'];
 
     // ----- Audio -----
-    let music=null, waves=null, muted=false, audioUnlocked=false;
+    let music=null, waves=null, 
+        // NEW: default to muted on mobile
+        muted = IS_MOBILE ? true : false, 
+        audioUnlocked=false;
+
     function initMusic(){
       if(!music){
         const src = TRACKS[(Math.random()*TRACKS.length)|0];
@@ -149,6 +149,7 @@
         music.muted = muted; music.volume = muted ? 0 : 0.35;
         const vol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25;
         waves.muted = muted; waves.volume = muted ? 0 : vol;
+        updateMuteUI();
       });
     }
     function startMusic(){ initMusic(); music.muted = muted; music.volume = muted ? 0 : 0.35; music.play().catch(()=>{}); }
@@ -165,10 +166,20 @@
       waves.muted = muted; waves.volume = muted ? 0 : vol; tryNext();
     }
     function toggleMute(){
+      const wasMuted = muted;
       muted=!muted;
       if(music){ music.muted = muted; music.volume = muted ? 0 : 0.35; }
       if(waves){ const vol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25;
         waves.muted = muted; waves.volume = muted ? 0 : vol; }
+      // If user just unmuted and the track isn't playing, try to start it
+      if(!muted && music && music.paused){ music.play().catch(()=>{}); }
+      if(!muted && waves && waves.paused){ try { waves.play(); } catch(_) {} }
+      updateMuteUI();
+    }
+    if(muteBtn){
+      muteBtn.addEventListener('click',(e)=>{ e.preventDefault(); toggleMute(); });
+      // Reflect initial (mobile-muted) state
+      setTimeout(updateMuteUI, 0);
     }
     document.addEventListener('pointerdown', unlockAudio, { once:true });
     document.addEventListener('keydown', unlockAudio, { once:true });
@@ -339,12 +350,20 @@
         } else {
           this.y = world.seaLevel - (this.index===0?30:60);
         }
-        this.baseY = this.y; this.vy=0; this.r=16; this.roll=0; this.pumpPhase=0; this.alive=true;
+        this.baseY = this.y; 
+        this.vy=0; 
+        this.r=16; 
+        this.roll=0; 
+        this.pumpPhase=0; 
+        this.alive=true;
+        // NEW: ensure no leftover forward bias after crash/restart
+        this.boost = 0;
       }
       revive(){ this.reset(); }
       setMascot(name){ this.name=name; this.sprites=new SpritePair(name); }
       update(dt){
         if(!this.alive) return;
+
         const accel=Number.isFinite(CFG.boost?.accel)?CFG.boost.accel:0.20;
         const decay=Number.isFinite(CFG.boost?.decay)?CFG.boost.decay:0.30;
         const pressed=INPUT[this.index].boost;
@@ -352,16 +371,18 @@
 
         // Vertical movement model
         if(IS_MOBILE){
-          // Hold to go up
-          const upAccel = 800;
-          const springK = 6.0;  // pull-down strength to baseY when not holding
+          // NEW: configurable, slightly slower mobile motion
+          const upAccel  = Number.isFinite(CFG.mobile?.motion?.riseAccel)    ? CFG.mobile.motion.riseAccel    : 800;
+          const springK  = Number.isFinite(CFG.mobile?.motion?.fallSpringK)  ? CFG.mobile.motion.fallSpringK  : 6.0;
+          const dampCoef = Number.isFinite(CFG.mobile?.motion?.fallDamping)  ? CFG.mobile.motion.fallDamping  : 3.5;
+
           if(mobileHold){
             this.vy -= upAccel * dt;
           }else{
             // Spring toward baseY with damping
             const diff = (this.baseY - this.y);
             this.vy += diff * springK * dt;
-            this.vy *= (1 - 3.5*dt); // damping
+            this.vy *= (1 - Math.max(0, Math.min(10, dampCoef)) * dt); // clamp for stability
           }
         }else{
           let ay=0; if(INPUT[this.index].up) ay-=700; if(INPUT[this.index].down) ay+=700;
@@ -415,7 +436,7 @@
       }
     }
 
-    // Obstacles
+    // Obstacles (unchanged)
     const activeObstacleSprites = new Set();
     const imagesLTR = [], imagesRTL = []; let bagLTR=[], bagRTL=[];
     function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
@@ -559,6 +580,18 @@
     const LEVEL_SECONDS=(Number.isFinite(CFG.level?.seconds)?CFG.level.seconds:20);
     let level=1, levelElapsed=0, BANNER_DURATION=1.8, levelBannerT=0, levelBannerText='';
 
+    // NEW: motivational messages for levels 2–30
+    const LEVEL_MSGS = {
+      2:'Nice start!', 3:'Keep it up!', 4:'Smooth moves!', 5:'Great rhythm!', 6:'Wow!',
+      7:'You got this!', 8:"You're rolling!", 9:'Strong momentum!', 10:'Cruising!', 11:'Dialed in!',
+      12:'On fire!', 13:'Next level!', 14:'Unstoppable!', 15:'Crushing it!', 16:'Mega flow!',
+      17:'Serious skill!', 18:'Wave master!', 19:'Elite focus!', 20:'Charging hard!',
+      21:'Epic form!', 22:'No limits!', 23:'Untouchable!', 24:'Beast mode!',
+      25:'Absolute machine!', 26:'Unreal!', 27:'Unbelievable!', 28:'Legendary!',
+      29:'Off the charts!', 30:'Champion status!'
+    };
+    let levelBannerSub = '';
+
     function levelSpeedMultiplier(){ return Math.min(4, 1 + 0.04*(level-1)); }
     function levelSpawnInterval(){ const base=1.8, min=0.45; const t = 1 - Math.exp(-(level-1)/10); return base - (base - min) * t; }
 
@@ -618,7 +651,12 @@
       if(players.every(p=>!p.alive)){ gameOver(); }
 
       if(levelElapsed>=LEVEL_SECONDS){
-        level++; levelElapsed = 0; levelBannerT = BANNER_DURATION; levelBannerText = 'LEVEL ' + level;
+        level++; levelElapsed = 0; levelBannerT = BANNER_DURATION; 
+        levelBannerText = 'LEVEL ' + level;
+        // NEW: set subtext
+        if(level >= 2 && level <= 30){ levelBannerSub = LEVEL_MSGS[level] || ''; }
+        else if(level > 30){ levelBannerSub = "You've arrived…"; }
+        else { levelBannerSub = ''; }
       }
       if(levelBannerT>0){ levelBannerT -= dt; }
     }
@@ -655,38 +693,53 @@
       ctx.fillText(text, cx, y + h - padY - 2);
       ctx.restore();
     }
-    function drawCenter(title, sub){
-      ctx.save();
-      const cx = vw/2;
-      let cy = vh/2 - 14;
-      drawTextPanel(title, cx, cy, 'bold 42px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica');
-      cy = vh/2 + 28;
-      drawTextPanel(sub, cx, cy, '600 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica');
-      ctx.restore();
-    }
+
+    // UPDATED: more modern banner with gradient + subtext
     function drawLevelBanner(){
       const w=vw, h=vh;
       const elapsed = BANNER_DURATION - levelBannerT;
       const alpha = elapsed < 0.25 ? (elapsed/0.25) : (elapsed > BANNER_DURATION-0.35 ? (BANNER_DURATION - elapsed)/0.35 : 1);
       const bw = Math.min(680, Math.floor(w*0.72));
-      const bh = 120;
+      const bh = 140; // a bit taller to fit subtext
       const bannerY = (CFG.ui?.levelBannerYPercent ?? 0.18);
       const x = (w-bw)/2, y = h * bannerY;
+
       ctx.save();
-      ctx.globalAlpha = 0.75 * Math.max(0,alpha);
-      ctx.fillStyle = '#061427';
+      ctx.globalAlpha = 0.90 * Math.max(0,alpha);
+
+      // Gradient panel
+      const grad = ctx.createLinearGradient(0, y, 0, y+bh);
+      grad.addColorStop(0, '#0b1f39cc');
+      grad.addColorStop(1, '#061427cc');
+      ctx.fillStyle = grad;
       ctx.strokeStyle = '#46e38a';
       ctx.lineWidth = 3;
-      roundRectPath(ctx, x, y, bw, bh, 16);
-      ctx.fill(); ctx.stroke();
+
+      // Soft glow
+      ctx.shadowColor = '#052b1a';
+      ctx.shadowBlur = 24;
+      roundRectPath(ctx, x, y, bw, bh, 18);
+      ctx.fill(); 
+      ctx.shadowBlur = 0;
+      ctx.stroke();
+
+      // Main title
       ctx.globalAlpha = Math.max(0,alpha);
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 52px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowColor = '#000';
       ctx.shadowBlur = 18;
-      ctx.fillText(levelBannerText, w/2, y+bh/2);
+      ctx.font = 'bold 56px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
+      ctx.fillText(levelBannerText, w/2, y + bh*0.45);
+
+      // Subtext (motivational line)
+      if(levelBannerSub){
+        ctx.shadowBlur = 12;
+        ctx.font = '600 20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
+        ctx.fillStyle = '#c8ffe2';
+        ctx.fillText(levelBannerSub, w/2, y + bh*0.75);
+      }
       ctx.restore();
     }
 
