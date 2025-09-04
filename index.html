@@ -22,6 +22,8 @@
     }
     .icon-btn:hover{ background:#122c4bee }
     .icon-btn svg{ width:20px; height:20px }
+    /* Hide Settings text on mobile */
+    @media (pointer: coarse){ .settings-label{ display:none } }
   </style>
 </head>
 <body>
@@ -55,7 +57,7 @@
         <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0A1.65 1.65 0 0 0 9 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82h0A1.65 1.65 0 0 0 20.91 11H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
       </svg>
-      <span>Settings</span>
+      <span class="settings-label">Settings</span>
     </a>
   </div>
 
@@ -325,7 +327,20 @@
 
     class Player{
       constructor(index,name){ this.index=index; this.name=name; this.sprites=new SpritePair(name); this.boost=0; this.alive=true; this.USER_SCALE=1; this.reset(); }
-      reset(){ this.baseX = vw * (this.index===0 ? 0.22 : 0.18); this.x=this.baseX; this.y=world.seaLevel - (this.index===0?30:60); this.baseY=this.y; this.vy=0; this.r=16; this.roll=0; this.pumpPhase=0; this.alive=true; }
+      reset(){
+        this.baseX = vw * (this.index===0 ? 0.22 : 0.18);
+        this.x = this.baseX;
+        // Start close to the bottom on mobile; desktop keeps prior behavior
+        if(IS_MOBILE){
+          const CFG = window.SURFLIME_CONFIG||{};
+          const offset = Number.isFinite(CFG?.mobile?.holdRise?.baseOffsetFromBottomPx) ? CFG.mobile.holdRise.baseOffsetFromBottomPx : 18;
+          const bot = (typeof bottomLimitPx==='function') ? bottomLimitPx() : (canvas.height*0.80);
+          this.y = bot - offset;
+        } else {
+          this.y = world.seaLevel - (this.index===0?30:60);
+        }
+        this.baseY = this.y; this.vy=0; this.r=16; this.roll=0; this.pumpPhase=0; this.alive=true;
+      }
       revive(){ this.reset(); }
       setMascot(name){ this.name=name; this.sprites=new SpritePair(name); }
       update(dt){
@@ -740,7 +755,7 @@
       ctx.save();
       ctx.font='16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
       ctx.fillStyle='#fff';
-      drawLevelPill();
+      ctx.fillText(`Level: ${level}`,16,24);
       const remain=Math.ceil(Math.max(0,LEVEL_SECONDS-levelElapsed));
       ctx.fillText(`Time: ${String(Math.floor(remain/60)).padStart(2,'0')}:${String(remain%60).padStart(2,'0')}`,16,48);
       if(!IS_MOBILE && twoPlayerEnabled()){

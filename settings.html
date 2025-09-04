@@ -34,7 +34,14 @@
     .link-btn{ display:inline-flex; align-items:center; justify-content:center; height:40px; padding:0 14px;
       border-radius:12px; border:1px solid #ffffff22; color:#fff; text-decoration:none; background:#0f233caa; }
     .link-btn:hover{ background:#122c4bee }
-  </style>
+  
+    .transport{ display:flex; align-items:center; gap:10px; margin-top:10px; }
+    .tbtn{ width:42px; height:42px; display:inline-flex; align-items:center; justify-content:center; border-radius:10px;
+      border:1px solid #ffffff22; background:#0f233caa; color:#fff; cursor:pointer; }
+    .tbtn:hover{ background:#122c4bee }
+    .songname{ font-weight:700; margin-left:6px; opacity:.9 }
+    
+</style>
 </head>
 <body>
   <div class="wrap">
@@ -45,10 +52,35 @@
         <label for="twoP"><strong>Two-Player Mode</strong></label>
         <input type="checkbox" id="twoP" />
       </div>
-      <a class="link-btn" href="index.html">Play</a>
+      <a class="link-btn" href="index.html" style="background:linear-gradient(180deg,#46e38a,#2fbf72); color:#0b1320; font-weight:800; padding:10px 22px; border:1px solid #46e38a88; box-shadow:0 8px 24px rgba(70,227,138,.25)">Play</a>
     </div>
 
     <!-- How to play -->
+    
+    <div class="info" id="music">
+      <h2 style="display:flex;align-items:center;gap:10px;margin:0 0 8px">
+        <span>Background Music</span>
+        <span class="songname" id="songName"></span>
+      </h2>
+      <div class="transport" id="transport">
+        <button class="tbtn" id="prevBtn" title="Previous" aria-label="Previous">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line>
+          </svg>
+        </button>
+        <button class="tbtn" id="playBtn" title="Play/Pause" aria-label="Play/Pause">
+          <svg id="playIcon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="8 5 19 12 8 19 8 5"></polygon>
+          </svg>
+        </button>
+        <button class="tbtn" id="nextBtn" title="Next" aria-label="Next">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="muted">Use the arrows to pick a song. Your choice is saved for the game.</div>
+    </div>
     <div class="info" id="howto">
       <h2>How to play</h2>
       <ul id="howto-list">
@@ -164,6 +196,64 @@
   const g1 = document.getElementById('grid1'), g2 = document.getElementById('grid2');
   ["Lime","Banana","Strawberry","Grapes","Orange","Pineapple","Watermelon"].forEach(n => { g1.appendChild(makeTile(n,0)); g2.appendChild(makeTile(n,1)); });
   updateSelections();
+
+  // --- Music transport in Settings ---
+  ;(function(){
+    const CFG = window.SURFLIME_CONFIG || {};
+    const s = CFG.music && CFG.music.supabase;
+    const nameEl = document.getElementById('songName');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const playBtn = document.getElementById('playBtn');
+    const playIcon= document.getElementById('playIcon');
+
+    const tracks = (s && s.enabled && s.projectRef && s.bucket && Array.isArray(s.files))
+      ? s.files.map(n => ({ name: n, url: `https://${s.projectRef}.supabase.co/storage/v1/object/public/${encodeURIComponent(s.bucket)}/${encodeURIComponent(n)}` }))
+      : [];
+
+    let i = 0;
+    if(tracks.length){
+      const saved = localStorage.getItem('musicSelectedUrl');
+      const found = tracks.findIndex(t => t.url === saved);
+      if(found >= 0) i = found;
+    }
+
+    let audio = null, playing = false;
+
+    function ensureAudio(){
+      if(!audio){ audio = new Audio(); audio.loop=false; audio.preload='auto'; audio.volume=0.6; audio.playsInline=true; }
+      return audio;
+    }
+    function show(){
+      if(!tracks.length){ nameEl.textContent = '(no Supabase songs)'; prevBtn.disabled=nextBtn.disabled=playBtn.disabled=true; return; }
+      nameEl.textContent = tracks[i].name;
+      // Save choice for the game
+      localStorage.setItem('musicSelectedUrl', tracks[i].url);
+      try{ localStorage.setItem('_musicChangedAt', String(Date.now())); }catch{}
+    }
+    function setPlayIcon(){
+      playIcon.innerHTML = playing
+        ? '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>'
+        : '<polygon points="8 5 19 12 8 19 8 5"></polygon>';
+    }
+    function play(){
+      if(!tracks.length) return;
+      const a = ensureAudio();
+      a.src = tracks[i].url;
+      a.play().then(()=>{ playing=true; setPlayIcon(); }).catch(()=>{});
+    }
+    function pause(){
+      if(audio){ audio.pause(); playing=false; setPlayIcon(); }
+    }
+
+    prevBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; i=(i-1+tracks.length)%tracks.length; show(); if(playing) play(); });
+    nextBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; i=(i+1)%tracks.length; show(); if(playing) play(); });
+    playBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; if(!playing) play(); else pause(); });
+
+    // initialize
+    show();
+  })();
+    
 </script>
 </body>
 </html>
