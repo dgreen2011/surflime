@@ -72,7 +72,7 @@
         enabled: true,
         projectRef: "iqzplffsjaopzspnbhok",
         bucket: "Music",
-        files: ["Surfing1.wav","Surfing2.wav","Surfing3.wav","Surfing4.wav","Surfing5.wav"]
+        files: ["Blue Horizon Calling.wav","Island of Surfing Dreams.wav","Moonlight on Waikiki.wav","North Shore Dreamline.wav","Palms at Golden Sunset.wav"]
       }
     }
   };
