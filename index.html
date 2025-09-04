@@ -22,25 +22,11 @@
     }
     .icon-btn:hover{ background:#122c4bee }
     .icon-btn svg{ width:20px; height:20px }
-    /* Hide Settings text on mobile */
-    @media (pointer: coarse){ .settings-label{ display:none } }
   </style>
 </head>
 <body>
   <canvas id="game" width="1024" height="576"></canvas>
-
   <div class="icon-row">
-    <!-- Pause button -->
-    <button id="btnPause" class="icon-btn" title="Start" aria-label="Start">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="pauseIcon">
-        <rect x="6" y="4" width="4" height="16"></rect>
-        <rect x="14" y="4" width="4" height="16"></rect>
-      </svg>
-      <span id="pauseLabel">Start</span>
-    </button>
-
-    <!-- Mute -->
     <button id="btnMute" class="icon-btn" title="Mute" aria-label="Mute">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -51,737 +37,757 @@
       <span>Mute</span>
     </button>
 
-    <!-- Settings -->
     <a class="icon-btn" href="settings.html" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0A1.65 1.65 0 0 0 9 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82h0A1.65 1.65 0 0 0 20.91 11H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
       </svg>
-      <span class="settings-label">Settings</span>
+      <span>Settings</span>
     </a>
   </div>
 
+  <!-- Load config first -->
   <script src="config.js"></script>
-  <script>
-  (()=>{
-    const IS_MOBILE = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
 
-    // ----- Pause button -----
-    const pauseBtn = document.getElementById('btnPause');
-    const pauseLbl = document.getElementById('pauseLabel');
-    function setPauseUI(text){ 
-      if(!pauseBtn) return; 
-      pauseLbl.textContent = text; pauseBtn.title = text;
-      const svg = pauseBtn.querySelector('#pauseIcon');
-      if(svg){
-        svg.innerHTML = (text==='Pause') 
-          ? '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>'
-          : '<polygon points="8 5 19 12 8 19 8 5"></polygon>';
+<script>
+(()=>{
+  // ===== Mobile detect =====
+  const IS_MOBILE = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
+
+  // --- Mute button wiring ---
+  const muteBtn = document.getElementById('btnMute');
+  function updateMuteUI(){
+    if(!muteBtn) return;
+    muteBtn.querySelector('span').textContent = muted ? 'Unmute' : 'Mute';
+    muteBtn.title = muted ? 'Unmute' : 'Mute';
+  }
+  if(muteBtn){
+    muteBtn.addEventListener('click',(e)=>{ e.preventDefault(); toggleMute(); updateMuteUI(); });
+    // init label after any audio init
+    setTimeout(updateMuteUI, 0);
+  }
+
+
+  // --- Apply mascot scale from config.js and keep it in sync ---
+  function applyUserScaleToPlayers(){
+    const desktop = Number.isFinite(CFG.mascot?.scale) ? CFG.mascot.scale : 1;
+    const mobile  = Number.isFinite(CFG.mascot?.scaleMobile) ? CFG.mascot.scaleMobile : desktop;
+    const s = IS_MOBILE ? mobile : desktop;
+    (players||[]).forEach(p=> p.USER_SCALE = s);
+  }
+
+
+  // ===== Default to 1-Player on first load of a browser session =====
+  try {
+    if (!sessionStorage.getItem('SL_INIT_2P')) {
+      localStorage.setItem('twoPlayerEnabled','false');
+      sessionStorage.setItem('SL_INIT_2P','1');
+    }
+  } catch {}
+
+  const world = { time: 0, seaLevel: 0 };
+
+  // Canvas & DPR
+  const canvas=document.getElementById('game'); const ctx=canvas.getContext('2d',{alpha:false});
+  let vw = canvas.width, vh = canvas.height, dpr=1;
+  function resizeDPR(){
+    const rect = canvas.getBoundingClientRect();
+    vw = Math.max(1, Math.round(rect.width));
+    vh = Math.max(1, Math.round(rect.height));
+    dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.round(vw * dpr);
+    canvas.height = Math.round(vh * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    world.seaLevel = vh * 0.58;
+  }
+  addEventListener('resize', resizeDPR);
+  addEventListener('focus', ()=>{ applyPlayerSelections();
+  applyUserScaleToPlayers(); });
+  resizeDPR();
+
+  // Config helpers
+  const CFG = window.SURFLIME_CONFIG || { };
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  function topLimitPx(){   const p=(CFG.limits?.topPercent??0.42);   return vh * Math.min(0.98, Math.max(0, p)); }
+  function bottomLimitPx(){
+    const p = (CFG.limits?.bottomPercent ?? 0.98);
+    const desiredPx = vh * Math.min(0.999, Math.max(0, p));
+    return Math.min(vh * 0.999, Math.max(topLimitPx() + 0.02*vh, desiredPx));
+  }
+  function obstacleScaleMul(){
+    const desk = Number.isFinite(CFG.obstacle?.scalePercent) ? CFG.obstacle.scalePercent : 100;
+    const mobi = Number.isFinite(CFG.obstacle?.scalePercentMobile) ? CFG.obstacle.scalePercentMobile : desk;
+    const p = IS_MOBILE ? mobi : desk;
+    return Math.max(0.1, Math.min(3, p / 100));
+  }
+  function depthMul(kind,y){
+    const top = topLimitPx(), bottom = bottomLimitPx();
+    const t = (bottom>top) ? clamp((y-top)/(bottom-top),0,1) : 0;
+    const d = CFG.depth?.[kind] || { topScale:1, bottomScale:1 };
+    return lerp(d.topScale??1, d.bottomScale??1, t);
+  }
+
+  // ===== AUDIO (mobile-safe unlock) =====
+  const TRACKS = ['./Music/Surfing.mp3','./Music/Surfing2.mp3','./Music/Surfing3.mp3'];
+  let music=null, waves=null, muted=false, audioUnlocked=false;
+
+  function initMusic(){
+    if(!music){
+      const src = TRACKS[(Math.random()*TRACKS.length)|0];
+      music = new Audio(src);
+      music.loop = true;
+      music.preload = 'auto';
+      music.playsInline = true;
+    }
+  }
+  function initWaves(){
+    if(!waves){
+      waves = new Audio();
+      waves.loop = true;
+      waves.preload = 'auto';
+      waves.playsInline = true;
+    }
+  }
+
+  // Unlock audio once on the first real user gesture
+  async function unlockAudio(){
+    if(audioUnlocked) return;
+    audioUnlocked = true;
+
+    initMusic(); initWaves();
+
+    const waveVol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25;
+
+    try { music.muted = true; await music.play(); } catch(_) {}
+
+    try {
+      for(const p of ['./Sfx/Waves.mp3','./Music/Waves.mp3']){
+        try { waves.muted = true; waves.src = p; await waves.play(); break; } catch(_) {}
       }
-    }
-    function updatePauseUI(){ 
-      if(state===STATE.RUN) setPauseUI('Pause');
-      else if(state===STATE.PAUSE) setPauseUI('Resume');
-      else setPauseUI('Start');
-    }
-    if(pauseBtn){
-      pauseBtn.addEventListener('click', (e)=>{
-        e.preventDefault();
-        if(state===STATE.RUN) pause();
-        else if(state===STATE.PAUSE) resume();
-        else start();
-        updatePauseUI();
-      });
-    }
+    } catch(_) {}
 
-    // ----- Mute button -----
-    const muteBtn = document.getElementById('btnMute');
-    function updateMuteUI(){
-      if(!muteBtn) return;
-      muteBtn.querySelector('span').textContent = muted ? 'Unmute' : 'Mute';
-      muteBtn.title = muted ? 'Unmute' : 'Mute';
-    }
-    if(muteBtn){
-      muteBtn.addEventListener('click',(e)=>{ e.preventDefault(); toggleMute(); updateMuteUI(); });
-      setTimeout(updateMuteUI, 0);
-    }
-
-    // ----- Config helpers -----
-    const CFG = window.SURFLIME_CONFIG || { };
-    const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-    const lerp=(a,b,t)=>a+(b-a)*t;
-
-    // ----- Supabase music URLs (if enabled) -----
-    function getSupabaseMusicUrls(){
-      const s = CFG.music && CFG.music.supabase;
-      if(!s || !s.enabled || !s.projectRef || !s.bucket || !Array.isArray(s.files)) return null;
-      const base = `https://${s.projectRef}.supabase.co/storage/v1/object/public/${encodeURIComponent(s.bucket)}/`;
-      return s.files.map(name => base + encodeURIComponent(name));
-    }
-    const TRACKS = getSupabaseMusicUrls() || ['./Music/Surfing.mp3','./Music/Surfing2.mp3','./Music/Surfing3.mp3'];
-
-    // ----- Audio -----
-    let music=null, waves=null, muted=false, audioUnlocked=false;
-    function initMusic(){
-      if(!music){
-        const src = TRACKS[(Math.random()*TRACKS.length)|0];
-        music = new Audio(src);
-        music.loop = true; music.preload = 'auto'; music.playsInline = true;
-      }
-    }
-    function initWaves(){
-      if(!waves){
-        waves = new Audio(); waves.loop = true; waves.preload = 'auto'; waves.playsInline = true;
-      }
-    }
-    async function unlockAudio(){
-      if(audioUnlocked) return;
-      audioUnlocked = true;
-      initMusic(); initWaves();
-      try { music.muted = true; await music.play(); } catch(_) {}
-      try {
-        // Leave waves local with a fallback path
-        for(const p of ['./Sfx/Waves.mp3','./Music/Waves.mp3']){
-          try { waves.muted = true; waves.src = p; await waves.play(); break; } catch(_) {}
-        }
-      } catch(_) {}
-      queueMicrotask(()=>{
-        music.muted = muted; music.volume = muted ? 0 : 0.35;
-        const vol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25;
-        waves.muted = muted; waves.volume = muted ? 0 : vol;
-      });
-    }
-    function startMusic(){ initMusic(); music.muted = muted; music.volume = muted ? 0 : 0.35; music.play().catch(()=>{}); }
-    function startWaves(){
-      initWaves();
-      const tryPaths = ['./Sfx/Waves.mp3','./Music/Waves.mp3'];
-      let i=0;
-      const tryNext = async ()=>{
-        if(i>=tryPaths.length) return;
-        waves.src = tryPaths[i++];
-        try { await waves.play(); } catch { tryNext(); }
-      };
-      const vol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25;
-      waves.muted = muted; waves.volume = muted ? 0 : vol; tryNext();
-    }
-    function toggleMute(){
-      muted=!muted;
-      if(music){ music.muted = muted; music.volume = muted ? 0 : 0.35; }
-      if(waves){ const vol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25;
-        waves.muted = muted; waves.volume = muted ? 0 : vol; }
-    }
-    document.addEventListener('pointerdown', unlockAudio, { once:true });
-    document.addEventListener('keydown', unlockAudio, { once:true });
-
-    // ----- Canvas -----
-    const canvas=document.getElementById('game'); const ctx=canvas.getContext('2d',{alpha:false});
-    let vw = canvas.width, vh = canvas.height, dpr=1;
-    const world = { time: 0, seaLevel: 0 };
-    function resizeDPR(){
-      const rect = canvas.getBoundingClientRect();
-      vw = Math.max(1, Math.round(rect.width));
-      vh = Math.max(1, Math.round(rect.height));
-      dpr = Math.max(1, window.devicePixelRatio || 1);
-      canvas.width = Math.round(vw * dpr);
-      canvas.height = Math.round(vh * dpr);
-      ctx.setTransform(dpr,0,0,dpr,0,0);
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      world.seaLevel = vh * 0.58;
-    }
-    addEventListener('resize', resizeDPR);
-    addEventListener('focus', ()=>{ applyPlayerSelections(); applyUserScaleToPlayers(); updatePauseUI(); });
-    resizeDPR();
-
-    function topLimitPx(){   const p=(CFG.limits?.topPercent??0.20);   return vh * Math.min(0.98, Math.max(0, p)); }
-    function bottomLimitPx(){
-      const p = (CFG.limits?.bottomPercent ?? 0.80);
-      const desiredPx = vh * Math.min(0.999, Math.max(0, p));
-      return Math.min(vh * 0.999, Math.max(topLimitPx() + 0.02*vh, desiredPx));
-    }
-
-    // ----- Scaling helpers -----
-    function obstacleScaleMul(){
-      const desk = Number.isFinite(CFG.obstacle?.scalePercent) ? CFG.obstacle.scalePercent : 100;
-      const shrinkPct = Number.isFinite(CFG.mobile?.scaleDownPercent?.obstacle) ? CFG.mobile.scaleDownPercent.obstacle : null;
-      const derivedMobile = Number.isFinite(CFG.obstacle?.scalePercentMobile)
-        ? CFG.obstacle.scalePercentMobile
-        : (shrinkPct!=null ? desk * (1 - clamp(shrinkPct,0,100)/100) : desk);
-      const p = IS_MOBILE ? derivedMobile : desk;
-      return Math.max(0.1, Math.min(3, p / 100));
-    }
-    function depthMul(kind,y){
-      const top = topLimitPx(), bottom = bottomLimitPx();
-      const t = (bottom>top) ? Math.max(0, Math.min(1, (y-top)/(bottom-top))) : 0;
-      const d = CFG.depth?.[kind] || { topScale:1, bottomScale:1 };
-      return lerp(d.topScale??1, d.bottomScale??1, t);
-    }
-    function applyUserScaleToPlayers(){
-      const desktop = Number.isFinite(CFG.mascot?.scale) ? CFG.mascot.scale : 1;
-      const shrinkPct = Number.isFinite(CFG.mobile?.scaleDownPercent?.mascot) ? CFG.mobile.scaleDownPercent.mascot : null;
-      const derivedMobile = Number.isFinite(CFG.mascot?.scaleMobile)
-        ? CFG.mascot.scaleMobile
-        : (shrinkPct!=null ? desktop * (1 - clamp(shrinkPct,0,100)/100) : desktop);
-      const s = IS_MOBILE ? derivedMobile : desktop;
-      (players||[]).forEach(p=> p.USER_SCALE = s);
-    }
-
-    // ----- Players & input -----
-    function assetsFor(name){
-      if(CFG.mascot?.assetsFor) return CFG.mascot.assetsFor(name);
-      const SURFER=new Set(['Banana','Pineapple']);
-      const base=`./Mascots/${name}/${name}`;
-      return { surf:`${base}${SURFER.has(name)?'Surfer':'Surf'}.png`, fall:`${base}Fall.png` };
-    }
-    function twoPlayerEnabled(){ return localStorage.getItem('twoPlayerEnabled') === 'true'; }
-    function setTwoPlayer(val){ localStorage.setItem('twoPlayerEnabled', val ? 'true' : 'false'); }
-    function selectedFor(idx){
-      const key = (idx===0) ? 'selectedMascotP1' : 'selectedMascotP2';
-      let name = localStorage.getItem(key);
-      if(!name){
-        name = (idx===0) ? 'Lime' : 'Banana';
-        localStorage.setItem(key, name);
-        if(idx===0) localStorage.setItem('selectedMascot', name);
-      }
-      return name;
-    }
-
-    const targetMascotH=112;
-    const INPUT = [ { up:false, down:false, boost:false }, { up:false, down:false, boost:false } ];
-
-    // Desktop keyboard controls (unchanged)
-    addEventListener('keydown', e=>{
-      if(e.code==='ArrowUp')INPUT[0].up=true;
-      if(e.code==='ArrowDown')INPUT[0].down=true;
-      if(e.code==='ArrowRight')INPUT[0].boost=true;
-      if(e.code==='KeyW')INPUT[1].up=true;
-      if(e.code==='KeyS')INPUT[1].down=true;
-      if(e.code==='KeyD')INPUT[1].boost=true;
-      if(e.code==='KeyM')toggleMute();
-      if(e.code==='Enter' || e.code==='NumpadEnter'){
-        if(state===STATE.RUN){ togglePause(); }
-        else if(state===STATE.PAUSE){ resume(); }
-        else if(state===STATE.MENU || state===STATE.OVER){ start(); }
-        updatePauseUI();
-      }
+    queueMicrotask(()=>{
+      music.muted = muted; music.volume = muted ? 0 : 0.35;
+      waves.muted = muted; waves.volume = muted ? 0 : waveVol;
     });
-    addEventListener('keyup',e=>{
-      if(e.code==='ArrowUp')INPUT[0].up=false;
-      if(e.code==='ArrowDown')INPUT[0].down=false;
-      if(e.code==='ArrowRight')INPUT[0].boost=false;
-      if(e.code==='KeyW')INPUT[1].up=false;
-      if(e.code==='KeyS')INPUT[1].down=false;
-      if(e.code==='KeyD')INPUT[1].boost=false;
-    });
+  }
 
-    // --- MOBILE: press & hold ONLY to rise; release returns to base position ---
-    let mobileHold=false;
-    function onPointerDown(e){
-      if(e.pointerType!=='touch' && !IS_MOBILE) return;
-      e.preventDefault();
-      mobileHold = true;
-      if(IS_MOBILE && (state===STATE.MENU || state===STATE.OVER)){ start(); updatePauseUI(); }
-      if(IS_MOBILE && state===STATE.PAUSE){ resume(); updatePauseUI(); }
+  function startMusic(){
+    initMusic();
+    music.muted = muted;
+    music.volume = muted ? 0 : 0.35;
+    music.play().catch(()=>{}); // if still locked, unlockAudio will handle it
+  }
+  function startWaves(){
+    initWaves();
+    const tryPaths = ['./Sfx/Waves.mp3','./Music/Waves.mp3'];
+    let i=0;
+    const tryNext = async ()=>{
+      if(i>=tryPaths.length) return;
+      waves.src = tryPaths[i++];
+      try { await waves.play(); } catch { tryNext(); }
+    };
+    const vol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25;
+    waves.muted = muted;
+    waves.volume = muted ? 0 : vol;
+    tryNext();
+  }
+  function toggleMute(){
+    muted=!muted;
+    if(music){ music.muted = muted; music.volume = muted ? 0 : 0.35; }
+    if(waves){ const vol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25;
+      waves.muted = muted; waves.volume = muted ? 0 : vol; }
+  }
+
+  // Bind unlock to first real gesture (tap/click or key)
+  document.addEventListener('pointerdown', unlockAudio, { once:true });
+  document.addEventListener('keydown', unlockAudio, { once:true });
+
+  // ===== Mascots / players =====
+  function assetsFor(name){
+    if(CFG.mascot?.assetsFor) return CFG.mascot.assetsFor(name);
+    const SURFER=new Set(['Banana','Pineapple']);
+    const base=`./Mascots/${name}/${name}`;
+    return { surf:`${base}${SURFER.has(name)?'Surfer':'Surf'}.png`, fall:`${base}Fall.png` };
+  }
+  function twoPlayerEnabled(){ return localStorage.getItem('twoPlayerEnabled') === 'true'; }
+  function setTwoPlayer(val){ localStorage.setItem('twoPlayerEnabled', val ? 'true' : 'false'); }
+  function selectedFor(idx){
+    const key = (idx===0) ? 'selectedMascotP1' : 'selectedMascotP2';
+    let name = localStorage.getItem(key);
+    if(!name){
+      name = (idx===0) ? 'Lime' : 'Banana';
+      localStorage.setItem(key, name);
+      if(idx===0) localStorage.setItem('selectedMascot', name);
     }
-    function onPointerUp(e){
-      if(e.pointerType!=='touch' && !IS_MOBILE) return;
-      e.preventDefault();
-      mobileHold = false;
+    return name;
+  }
+
+  const targetMascotH=112;
+  const INPUT = [ { up:false, down:false, boost:false }, { up:false, down:false, boost:false } ];
+
+  // --- Desktop keyboard ---
+  addEventListener('keydown', e=>{
+    if(e.code==='ArrowUp')INPUT[0].up=true;
+    if(e.code==='ArrowDown')INPUT[0].down=true;
+    if(e.code==='ArrowRight')INPUT[0].boost=true;
+
+    if(e.code==='KeyW')INPUT[1].up=true;
+    if(e.code==='KeyS')INPUT[1].down=true;
+    if(e.code==='KeyD')INPUT[1].boost=true;
+
+    if(e.code==='KeyM')toggleMute();
+
+    if(e.code==='Enter' || e.code==='NumpadEnter'){
+      if(state===STATE.RUN){ togglePause(); }
+      else if(state===STATE.PAUSE){ resume(); }
+      else if(state===STATE.MENU || state===STATE.OVER){ start(); }
     }
-    const canvasEvents = ['pointerdown','pointerup','pointercancel','pointerleave','pointerout'];
-    canvas.addEventListener('gesturestart', e=>e.preventDefault());
-    canvas.addEventListener('gesturechange', e=>e.preventDefault());
-    canvas.addEventListener('gestureend', e=>e.preventDefault());
-    canvasEvents.forEach(type=> canvas.addEventListener(type, (type==='pointerdown'?onPointerDown:onPointerUp), {passive:false}));
+  });
+  addEventListener('keyup',e=>{
+    if(e.code==='ArrowUp')INPUT[0].up=false;
+    if(e.code==='ArrowDown')INPUT[0].down=false;
+    if(e.code==='ArrowRight')INPUT[0].boost=false;
 
-    // Mascot sprites/classes
-    function installMascotFallback(img, name, kind, primary){
-      const cands=[];
-      const names=[name, (name==='Pineapple'?'Pinapple':null)].filter(Boolean);
-      for(const nm of names){
-        const base=`./Mascots/${nm}/${nm}`;
-        if(kind==='surf'){ cands.push(`${base}Surfer.png`, `${base}Surf.png`); }
-        else { cands.push(`${base}Fall.png`); }
-      }
-      if(primary && !cands.includes(primary)) cands.unshift(primary);
-      let i=0; img.addEventListener('error', ()=>{ if(++i<cands.length) img.src=cands[i]; });
-      img.src=cands[0];
+    if(e.code==='KeyW')INPUT[1].up=false;
+    if(e.code==='KeyS')INPUT[1].down=false;
+    if(e.code==='KeyD')INPUT[1].boost=false;
+  });
+
+  
+  // --- Mobile gestures (pointer events) ---
+  // Simplified: swipe up => move up, swipe down => move down. No boost on mobile.
+  const touchPointers = new Map(); // id -> {y}
+  let upDownClearTimer=null;
+  const SWIPE_EPS = 6;        // px change to count as up/down
+  const CLEAR_AFTER = 160;    // ms to release up/down after last movement
+
+  function setP1(up,down){ INPUT[0].up=up; INPUT[0].down=down; }
+  function clearUpDownSoon(){
+    clearTimeout(upDownClearTimer);
+    upDownClearTimer = setTimeout(()=> setP1(false,false), CLEAR_AFTER);
+  }
+
+  function onPointerDown(e){
+    if(e.pointerType!=='touch' && !IS_MOBILE) return;
+    e.preventDefault();
+    touchPointers.set(e.pointerId, { y:e.clientY });
+    // Tap to start/resume on mobile
+    if(IS_MOBILE && (state===STATE.MENU || state===STATE.OVER)){ start(); }
+    if(IS_MOBILE && state===STATE.PAUSE){ resume(); }
+  }
+  function onPointerMove(e){
+    if(!touchPointers.has(e.pointerId)) return;
+    e.preventDefault();
+    const rec = touchPointers.get(e.pointerId);
+    const dy = e.clientY - rec.y;
+    if(Math.abs(dy) > SWIPE_EPS){
+      if(dy < 0)      setP1(true,false);
+      else if(dy > 0) setP1(false,true);
+      rec.y = e.clientY;
+      clearUpDownSoon();
     }
-    class SpritePair {
-      constructor(name){
-        this.name=name;
-        this.surf=new Image(); this.surfReady=false;
-        this.fall=new Image(); this.fallReady=false;
-        const p=assetsFor(name);
-        this.surf.onload=()=>this.surfReady=true;
-        this.fall.onload=()=>this.fallReady=true;
-        installMascotFallback(this.surf, this.name, 'surf', p.surf);
-        installMascotFallback(this.fall, this.name, 'fall', p.fall);
-      }
+  }
+  function onPointerUp(e){
+    if(!touchPointers.has(e.pointerId)) return;
+    e.preventDefault();
+    touchPointers.delete(e.pointerId);
+    if(touchPointers.size===0){
+      clearUpDownSoon();
     }
-    function scaleFor(kind,y,img, userScale){
-      const base = Math.min(0.25, Math.max(0.08, targetMascotH / ((img && img.height) || targetMascotH)));
-      const mul = depthMul(kind,y);
-      return base * (userScale ?? 1) * mul;
+  }
+  // Attach to canvas only
+  canvas.addEventListener('pointerdown', onPointerDown, {passive:false});
+  canvas.addEventListener('pointermove', onPointerMove, {passive:false});
+  addEventListener('pointerup', onPointerUp, {passive:false});
+  addEventListener('pointercancel', onPointerUp, {passive:false});
+
+  // Fallbacks for very old iOS Safari (no harm on others)
+  canvas.addEventListener('gesturestart', e=>e.preventDefault());
+  canvas.addEventListener('gesturechange', e=>e.preventDefault());
+  canvas.addEventListener('gestureend', e=>e.preventDefault());
+function installMascotFallback(img, name, kind, primary){
+    const cands=[];
+    const names=[name, (name==='Pineapple'?'Pinapple':null)].filter(Boolean);
+    for(const nm of names){
+      const base=`./Mascots/${nm}/${nm}`;
+      if(kind==='surf'){ cands.push(`${base}Surfer.png`, `${base}Surf.png`); }
+      else { cands.push(`${base}Fall.png`); }
     }
+    if(primary && !cands.includes(primary)) cands.unshift(primary);
+    let i=0; img.addEventListener('error', ()=>{ if(++i<cands.length) img.src=cands[i]; });
+    img.src=cands[0];
+  }
 
-    class Player{
-      constructor(index,name){ this.index=index; this.name=name; this.sprites=new SpritePair(name); this.boost=0; this.alive=true; this.USER_SCALE=1; this.reset(); }
-      reset(){
-        this.baseX = vw * (this.index===0 ? 0.22 : 0.18);
-        this.x = this.baseX;
-        // Start close to the bottom on mobile; desktop keeps prior behavior
-        if(IS_MOBILE){
-          const CFG = window.SURFLIME_CONFIG||{};
-          const offset = Number.isFinite(CFG?.mobile?.holdRise?.baseOffsetFromBottomPx) ? CFG.mobile.holdRise.baseOffsetFromBottomPx : 18;
-          const bot = (typeof bottomLimitPx==='function') ? bottomLimitPx() : (canvas.height*0.80);
-          this.y = bot - offset;
-        } else {
-          this.y = world.seaLevel - (this.index===0?30:60);
-        }
-        this.baseY = this.y; this.vy=0; this.r=16; this.roll=0; this.pumpPhase=0; this.alive=true;
-      }
-      revive(){ this.reset(); }
-      setMascot(name){ this.name=name; this.sprites=new SpritePair(name); }
-      update(dt){
-        if(!this.alive) return;
-        const accel=Number.isFinite(CFG.boost?.accel)?CFG.boost.accel:0.20;
-        const decay=Number.isFinite(CFG.boost?.decay)?CFG.boost.decay:0.30;
-        const pressed=INPUT[this.index].boost;
-        this.boost=clamp(this.boost + (pressed?accel:-decay)*dt,0,1);
-
-        // Vertical movement model
-        if(IS_MOBILE){
-          // Hold to go up
-          const upAccel = 800;
-          const springK = 6.0;  // pull-down strength to baseY when not holding
-          if(mobileHold){
-            this.vy -= upAccel * dt;
-          }else{
-            // Spring toward baseY with damping
-            const diff = (this.baseY - this.y);
-            this.vy += diff * springK * dt;
-            this.vy *= (1 - 3.5*dt); // damping
-          }
-        }else{
-          let ay=0; if(INPUT[this.index].up) ay-=700; if(INPUT[this.index].down) ay+=700;
-          this.vy += ay*dt;
-          const maxV=210; this.vy=clamp(this.vy,-maxV,maxV);
-          if(!INPUT[this.index].up && !INPUT[this.index].down){
-            if(Math.abs(this.vy) < 800*dt) this.vy=0; else this.vy -= Math.sign(this.vy)*800*dt;
-          }
-        }
-
-        this.y += this.vy*dt;
-
-        const pumpForce = Math.sin(this.pumpPhase) * 40 * this.boost;
-        this.pumpPhase += (4 + 4*this.boost) * dt;
-        this.y += pumpForce * 0.004 * dt;
-
-        const img=this.sprites.surfReady?this.sprites.surf:null;
-        const hw = img ? (img.width * scaleFor('mascot', this.y, img, this.USER_SCALE))*0.5 : 40;
-        const farRight = vw - (hw + 8);
-        const pushStrength = Number.isFinite(CFG.boost?.pushStrength) ? CFG.boost.pushStrength : 1.0;
-        const moveLerp = Number.isFinite(CFG.boost?.moveLerp) ? CFG.boost.moveLerp : 1.0;
-        const targetX = this.baseX + (farRight - this.baseX) * Math.max(0, Math.min(1, this.boost * pushStrength));
-        this.x += (targetX - this.x) * dt * moveLerp;
-
-        const hh = img ? (img.height * scaleFor('mascot', this.y, img, this.USER_SCALE))*0.5 : 40;
-        const pH = img ? img.height * scaleFor('mascot', this.y, img, this.USER_SCALE) : hh*2;
-        const topOffset = pH * 0.78;
-        const topPx = topLimitPx(), botPx = bottomLimitPx();
-        const minY = Math.max(hh, topPx + topOffset);
-        const maxY = Math.min(vh - hh, botPx - hh);
-
-        // Keep within bounds
-        this.y = Math.max(Math.min(this.y, maxY), minY);
-
-        // On mobile allow some left drift but keep at least baseX
-        const minXDesktop = Math.max(hw, this.baseX);
-        const minXMobile  = hw + 8;
-        const minX = IS_MOBILE ? minXMobile : minXDesktop;
-        this.x = Math.max(Math.min(this.x, vw - hw), minX);
-
-        // roll
-        this.roll += (((this.vy)*0.003 + (this.boost>0?0.12:0)) - this.roll)*dt*6;
-      }
-      draw(ctx){
-        ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this.roll);
-        const showingFall = (!this.alive) || (state===STATE.OVER);
-        const img   = showingFall ? this.sprites.fall     : this.sprites.surf;
-        const ready = showingFall ? this.sprites.fallReady: this.sprites.surfReady;
-        if(ready){ const s=scaleFor('mascot',this.y,img,this.USER_SCALE); const w=img.width*s, h=img.height*s; ctx.drawImage(img,-w*0.5,-h*0.78,w,h); }
-        ctx.restore();
-      }
+  class SpritePair {
+    constructor(name){
+      this.name=name;
+      this.surf=new Image(); this.surfReady=false;
+      this.fall=new Image(); this.fallReady=false;
+      const p=assetsFor(name);
+      this.surf.onload=()=>this.surfReady=true;
+      this.fall.onload=()=>this.fallReady=true;
+      installMascotFallback(this.surf, this.name, 'surf', p.surf);
+      installMascotFallback(this.fall, this.name, 'fall', p.fall);
     }
+  }
+  function scaleFor(kind,y,img, userScale){
+    const base = Math.min(0.25, Math.max(0.08, targetMascotH / ((img && img.height) || targetMascotH)));
+    const mul = depthMul(kind,y);
+    return base * (userScale ?? 1) * mul;
+  }
 
-    // Obstacles
-    const activeObstacleSprites = new Set();
-    const imagesLTR = [], imagesRTL = []; let bagLTR=[], bagRTL=[];
-    function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
-    function refillBag(dir){ if(dir==='ltr'){ bagLTR=shuffle(imagesLTR.slice()); } else { bagRTL=shuffle(imagesRTL.slice()); } }
-    function nextImageFor(dir){
-      const pool = dir==='ltr'?imagesLTR:imagesRTL; if(pool.length===0) return null;
-      const bag  = dir==='ltr'?bagLTR:bagRTL; if(bag.length===0) refillBag(dir);
-      let tries=bag.length; while(tries--){
-        const img = bag.shift();
-        if(!activeObstacleSprites.has(img.src)) return img;
-        bag.push(img);
+  class Player{
+    constructor(index,name){ this.index=index; this.name=name; this.sprites=new SpritePair(name); this.boost=0; this.alive=true; this.USER_SCALE=1; this.reset(); }
+    reset(){ this.baseX = vw * (this.index===0 ? 0.22 : 0.18); this.x=this.baseX; this.y=world.seaLevel - (this.index===0?30:60); this.vy=0; this.r=16; this.roll=0; this.pumpPhase=0; this.alive=true; }
+    revive(){ this.reset(); }
+    setMascot(name){ this.name=name; this.sprites=new SpritePair(name); }
+    update(dt){
+      if(!this.alive) return;
+      const accel=Number.isFinite(CFG.boost?.accel)?CFG.boost.accel:0.20;
+      const decay=Number.isFinite(CFG.boost?.decay)?CFG.boost.decay:0.30;
+      const pressed=INPUT[this.index].boost;
+      this.boost=clamp(this.boost + (pressed?accel:-decay)*dt,0,1);
+
+      const mobileMul = IS_MOBILE ? 1.25 : 1.0;
+      let ay=0; if(INPUT[this.index].up) ay-=700*mobileMul; if(INPUT[this.index].down) ay+=700*mobileMul;
+      this.vy += ay*dt;
+      const maxV=210*mobileMul; this.vy=clamp(this.vy,-maxV,maxV);
+      if(!INPUT[this.index].up && !INPUT[this.index].down){
+        if(Math.abs(this.vy) < 800*dt) this.vy=0; else this.vy -= Math.sign(this.vy)*800*dt;
       }
-      return null;
+      this.y += this.vy*dt;
+
+      const pumpForce = Math.sin(this.pumpPhase) * 40 * this.boost;
+      this.pumpPhase += (4 + 4*this.boost) * dt;
+      this.y += pumpForce * 0.004 * dt;
+
+      const img=this.sprites.surfReady?this.sprites.surf:null;
+      const hw = img ? (img.width * scaleFor('mascot', this.y, img, this.USER_SCALE))*0.5 : 40;
+      const farRight = vw - (hw + 8);
+      const pushStrength = Number.isFinite(CFG.boost?.pushStrength) ? CFG.boost.pushStrength : 1.0;
+      const moveLerp = Number.isFinite(CFG.boost?.moveLerp) ? CFG.boost.moveLerp : 1.0;
+      const targetX = this.baseX + (farRight - this.baseX) * Math.max(0, Math.min(1, this.boost * pushStrength));
+      this.x += (targetX - this.x) * dt * moveLerp;
+
+      const hh = img ? (img.height * scaleFor('mascot', this.y, img, this.USER_SCALE))*0.5 : 40;
+      const pH = img ? img.height * scaleFor('mascot', this.y, img, this.USER_SCALE) : hh*2;
+      const topOffset = pH * 0.78;
+      const topPx = topLimitPx(), botPx = bottomLimitPx();
+      const minY = Math.max(hh, topPx + topOffset);
+      const maxY = Math.min(vh - hh, botPx - hh);
+      this.x = Math.max(Math.min(this.x, vw - hw), Math.max(hw, this.baseX));
+      this.y = Math.max(Math.min(this.y, maxY), minY);
+      this.roll += (((this.vy)*0.003 + (this.boost>0?0.12:0)) - this.roll)*dt*6;
     }
-    function preloadObstacle(path, target){ const img=new Image(); img.onload=()=>target.push(img); img.src=path; }
-    const MAX_OBS = 100;
-    for(let i=1;i<=MAX_OBS;i++){ preloadObstacle(`./Obstacles/LeftToRight/Obstacle${i}.png`, imagesLTR); preloadObstacle(`./Obstacles/RightToLeft/Obstacle${i}.png`, imagesRTL); }
-    const SPEED={LTR_MIN:1.05,LTR_MAX:1.20,RTL_MIN:0.70,RTL_MAX:1.10};
+    draw(ctx){
+      ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this.roll);
+      const showingFall = (!this.alive) || (state===STATE.OVER);
+      const img   = showingFall ? this.sprites.fall     : this.sprites.surf;
+      const ready = showingFall ? this.sprites.fallReady: this.sprites.surfReady;
+      if(ready){ const s=scaleFor('mascot',this.y,img,this.USER_SCALE); const w=img.width*s, h=img.height*s; ctx.drawImage(img,-w*0.5,-h*0.78,w,h); }
+      ctx.restore();
+    }
+  }
 
-    class Obstacle{
-      constructor(){
-        const haveLTR=imagesLTR.length>0, haveRTL=imagesRTL.length>0;
-        if(!haveLTR && !haveRTL){ this.valid=false; return; }
-        this.dir = IS_MOBILE ? 'rtl' : ((haveLTR && haveRTL) ? (Math.random()<0.7 ? 'rtl' : 'ltr') : (haveRTL?'rtl':'ltr'));
-        this.img = nextImageFor(this.dir); if(!this.img){ this.valid=false; return; }
-        activeObstacleSprites.add(this.img.src);
+  // ===== Obstacles (includes smooth bounds) =====
+  const activeObstacleSprites = new Set();
+  const imagesLTR = [], imagesRTL = []; let bagLTR=[], bagRTL=[];
+  function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
+  function refillBag(dir){ if(dir==='ltr'){ bagLTR=shuffle(imagesLTR.slice()); } else { bagRTL=shuffle(imagesRTL.slice()); } }
+  function nextImageFor(dir){
+    const pool = dir==='ltr'?imagesLTR:imagesRTL; if(pool.length===0) return null;
+    const bag  = dir==='ltr'?bagLTR:bagRTL; if(bag.length===0) refillBag(dir);
+    let tries=bag.length; while(tries--){
+      const img = bag.shift();
+      if(!activeObstacleSprites.has(img.src)) return img;
+      bag.push(img);
+    }
+    return null;
+  }
+  function preloadObstacle(path, target){ const img=new Image(); img.onload=()=>target.push(img); img.src=path; }
+  const MAX_OBS = 100;
+  for(let i=1;i<=MAX_OBS;i++){ preloadObstacle(`./Obstacles/LeftToRight/Obstacle${i}.png`, imagesLTR); preloadObstacle(`./Obstacles/RightToLeft/Obstacle${i}.png`, imagesRTL); }
+  const SPEED={LTR_MIN:1.05,LTR_MAX:1.20,RTL_MIN:0.70,RTL_MAX:1.10};
 
-        const topPx=topLimitPx(), botPx=bottomLimitPx();
-        const midDepth = depthMul('obstacle', (topPx+botPx)/2) * obstacleScaleMul();
-        const approxH = this.img.height * midDepth;
-        const topOffset = approxH * 0.78;
-        const minSpawnY = Math.max(topPx + topOffset, 120);
-        const maxSpawnY = Math.min(vh - 60, botPx - approxH*0.5);
+  class Obstacle{
+    constructor(){
+      const haveLTR=imagesLTR.length>0, haveRTL=imagesRTL.length>0;
+      if(!haveLTR && !haveRTL){ this.valid=false; return; }
+      this.dir = IS_MOBILE ? 'rtl' : ((haveLTR && haveRTL) ? (Math.random()<0.7 ? 'rtl' : 'ltr') : (haveRTL?'rtl':'ltr'));
+      this.img = nextImageFor(this.dir); if(!this.img){ this.valid=false; return; }
+      activeObstacleSprites.add(this.img.src);
 
-        const Y_GAP = 56;
-        let tries=16; do{
-          this.y = minSpawnY + Math.random()*Math.max(4, maxSpawnY-minSpawnY);
-          tries--;
-        }while(tries>0 && obstacles.some(o=>o.dir!==this.dir && Math.abs(o.y - this.y) < Y_GAP));
+      const topPx=topLimitPx(), botPx=bottomLimitPx();
+      const midDepth = depthMul('obstacle', (topPx+botPx)/2) * obstacleScaleMul();
+      const approxH = this.img.height * midDepth;
+      const topOffset = approxH * 0.78;
+      const minSpawnY = Math.max(topPx + topOffset, 120);
+      const maxSpawnY = Math.min(vh - 60, botPx - approxH*0.5);
 
-        this.x = (this.dir==='rtl') ? (vw + 120 + Math.random()*120) : (-120 - Math.random()*120);
+      const Y_GAP = 56;
+      let tries=16; do{
+        this.y = minSpawnY + Math.random()*Math.max(4, maxSpawnY-minSpawnY);
+        tries--;
+      }while(tries>0 && obstacles.some(o=>o.dir!==this.dir && Math.abs(o.y - this.y) < Y_GAP));
 
-        const levelMul = levelSpeedMultiplier();
-        const base = (this.dir==='rtl')
-          ? (SPEED.RTL_MIN + Math.random()*(SPEED.RTL_MAX - SPEED.RTL_MIN))
-          : (SPEED.LTR_MIN + Math.random()*(SPEED.LTR_MAX - SPEED.LTR_MIN));
-        this.factor = base * levelMul;
+      this.x = (this.dir==='rtl') ? (vw + 120 + Math.random()*120) : (-120 - Math.random()*120);
 
-        this.motion = null; this.amp=0; this.freq=0; this.phase=0; this.baseY=this.y; this.vy=0;
-        this.valid=true;
-      }
-      _enforceBounds(dt){
-        const topPx=topLimitPx(), botPx=bottomLimitPx();
-        const depth = depthMul('obstacle', this.y) * obstacleScaleMul();
-        const h = this.img.height * depth;
-        const minCenter = topPx + h*0.78 + 2;
-        const maxCenter = botPx - (h - h*0.78) - 2;
-        const k = 12, damp = 0.15;
-        if(this.y < minCenter){
-          const pen = (minCenter - this.y);
-          this.y += pen * Math.min(1, k*dt);
-          if(this.motion === 'drift'){ this.vy = Math.abs(this.vy||8) * (1 - damp); }
-        } else if(this.y > maxCenter){
-          const pen = (this.y - maxCenter);
-          this.y -= pen * Math.min(1, k*dt);
-          if(this.motion === 'drift'){ this.vy = -Math.abs(this.vy||8) * (1 - damp); }
-        }
-        if(this.motion === 'sine'){
-          const safeSpan = Math.max(8, (maxCenter - minCenter) - 8);
-          const maxAmp = Math.max(2, safeSpan * 0.45);
-          if(this.amp > maxAmp) this.amp = lerp(this.amp, maxAmp, Math.min(1, 6*dt));
-          this.baseY = Math.max(minCenter + this.amp, Math.min(maxCenter - this.amp, this.baseY));
-          if(this.y <= minCenter+1 || this.y >= maxCenter-1){ this.phase += 1.5*dt; }
-        }
-      }
-      update(dt){
-        if(!this.valid) return;
-        const v = 240 * this.factor;
-        this.x += (this.dir==='rtl' ? -v : v) * dt;
-        if(this.motion == null){
-          this.motion = (Math.random()<0.6) ? 'sine' : 'drift';
-          this.amp = 10 + Math.random()*12;
-          this.freq = 0.08 + Math.random()*0.10;
-          this.phase = Math.random()*Math.PI*2;
-          this.baseY = this.y;
-          this.vy = (Math.random()<0.5?1:-1) * (4 + Math.random()*6);
-        }
-        if(this.motion === 'sine'){
-          this.y = this.baseY + Math.sin((world.time + this.phase) * Math.PI*2 * this.freq) * this.amp;
-        }else{
-          this.y += this.vy * dt;
-        }
-        this._enforceBounds(dt);
-      }
-      off(){ return this.dir==='rtl' ? (this.x < -120) : (this.x > vw + 120); }
-      cleanup(){ if(this.img){ activeObstacleSprites.delete(this.img.src); } }
-      hit(player){
-        if(!player.alive || !this.img) return false;
-        const depth = depthMul('obstacle', this.y) * obstacleScaleMul();
-        const oH = this.img.height * depth;
-        const oW = this.img.width  * depth;
-        const oTop = this.y - oH*0.78;
-        const oBottom = oTop + oH;
-        const oLeft = this.x - oW*0.5;
-        const oRight = this.x + oW*0.5;
-        const oLowerFrac = Number.isFinite(CFG.collision?.obstacleLowerZone) ? CFG.collision.obstacleLowerZone : 0.40;
-        const oActiveTop = oTop + oH * (1 - oLowerFrac);
-        const oActiveBottom = oBottom;
-        const img = player.sprites.surfReady ? player.sprites.surf : null;
-        const pH = img ? img.height * scaleFor('mascot', player.y, img, player.USER_SCALE) : 32;
-        const pW = img ? img.width  * scaleFor('mascot', player.y, img, player.USER_SCALE) : 32;
-        const pTop = player.y - pH*0.78;
-        const pBottom = pTop + pH;
-        const pLeft  = player.x - pW*0.5;
-        const pRight = player.x + pW*0.5;
-        const pLowerFrac = Number.isFinite(CFG.collision?.limeLowerZone) ? CFG.collision.limeLowerZone : 0.40;
-        const pActiveTop = pTop + pH * (1 - pLowerFrac);
-        const pActiveBottom = pBottom;
-        const shrinkLR = (L, R, W) => { const pad = W * 0.08 * 0.5; return [L + pad, R - pad]; };
-        const [oL, oR] = shrinkLR(oLeft, oRight, oW);
-        const [pL, pR] = shrinkLR(pLeft, pRight, pW);
-        const horiz = Math.min(oR, pR) > Math.max(oL, pL);
-        const vert  = Math.min(oActiveBottom, pActiveBottom) > Math.max(oActiveTop, pActiveTop);
-        return horiz && vert;
-      }
-      draw(ctx){
-        if(!this.img) return;
-        ctx.save(); ctx.translate(this.x,this.y);
-        const depth = depthMul('obstacle', this.y) * obstacleScaleMul();
-        const h = this.img.height * depth;
-        const w = this.img.width  * depth;
-        ctx.drawImage(this.img, -w*0.5, -h*0.78, w, h);
-        ctx.restore();
-      }
+      const levelMul = levelSpeedMultiplier();
+      const base = (this.dir==='rtl')
+        ? (SPEED.RTL_MIN + Math.random()*(SPEED.RTL_MAX - SPEED.RTL_MIN))
+        : (SPEED.LTR_MIN + Math.random()*(SPEED.LTR_MAX - SPEED.LTR_MIN));
+      this.factor = base * levelMul;
+
+      this.motion = null; this.amp=0; this.freq=0; this.phase=0; this.baseY=this.y; this.vy=0;
+      this.valid=true;
     }
 
-    // Game state & loop
-    const STATE={MENU:0,RUN:1,PAUSE:2,OVER:3};
-    let state=STATE.MENU;
-    let last=0, dt=0;
-    const LEVEL_SECONDS=(Number.isFinite(CFG.level?.seconds)?CFG.level.seconds:20);
-    let level=1, levelElapsed=0, BANNER_DURATION=1.8, levelBannerT=0, levelBannerText='';
+    // Smooth bounds: spring back + damping, and keep sine motion within safe envelope
+    _enforceBounds(dt){
+      const topPx=topLimitPx(), botPx=bottomLimitPx();
+      const depth = depthMul('obstacle', this.y) * obstacleScaleMul();
+      const h = this.img.height * depth;
 
-    function levelSpeedMultiplier(){ return Math.min(4, 1 + 0.04*(level-1)); }
-    function levelSpawnInterval(){ const base=1.8, min=0.45; const t = 1 - Math.exp(-(level-1)/10); return base - (base - min) * t; }
+      const minCenter = topPx + h*0.78 + 2;
+      const maxCenter = botPx - (h - h*0.78) - 2;
 
-    const players=[];
-    function applyPlayerSelections(){
-      if(IS_MOBILE){ setTwoPlayer(false); }
-      const want2 = !IS_MOBILE && twoPlayerEnabled();
-      if(players.length===0){
-        players.push(new Player(0, selectedFor(0)));
-        if(want2) players.push(new Player(1, selectedFor(1)));
+      const k = 12;          // spring strength
+      const damp = 0.15;     // velocity damping when contacting
+
+      if(this.y < minCenter){
+        const pen = (minCenter - this.y);
+        this.y += pen * Math.min(1, k*dt);
+        if(this.motion === 'drift'){ this.vy = Math.abs(this.vy||8) * (1 - damp); }
+      } else if(this.y > maxCenter){
+        const pen = (this.y - maxCenter);
+        this.y -= pen * Math.min(1, k*dt);
+        if(this.motion === 'drift'){ this.vy = -Math.abs(this.vy||8) * (1 - damp); }
+      }
+
+      if(this.motion === 'sine'){
+        const safeSpan = Math.max(8, (maxCenter - minCenter) - 8);
+        const maxAmp = Math.max(2, safeSpan * 0.45);
+        if(this.amp > maxAmp) this.amp = lerp(this.amp, maxAmp, Math.min(1, 6*dt));
+        this.baseY = clamp(this.baseY, minCenter + this.amp, maxCenter - this.amp);
+        if(this.y <= minCenter+1 || this.y >= maxCenter-1){ this.phase += 1.5*dt; }
+      }
+    }
+
+    update(dt){
+      if(!this.valid) return;
+      const v = 240 * this.factor;
+      this.x += (this.dir==='rtl' ? -v : v) * dt;
+
+      if(this.motion == null){
+        this.motion = (Math.random()<0.6) ? 'sine' : 'drift';
+        this.amp = 10 + Math.random()*12;
+        this.freq = 0.08 + Math.random()*0.10;
+        this.phase = Math.random()*Math.PI*2;
+        this.baseY = this.y;
+        this.vy = (Math.random()<0.5?1:-1) * (4 + Math.random()*6);
+      }
+
+      if(this.motion === 'sine'){
+        this.y = this.baseY + Math.sin((world.time + this.phase) * Math.PI*2 * this.freq) * this.amp;
       }else{
-        if(want2 && players.length===1){ players.push(new Player(1, selectedFor(1))); }
-        else if(!want2 && players.length===2){ players.pop(); }
-        players[0].setMascot(selectedFor(0));
-        if(players[1]) players[1].setMascot(selectedFor(1));
+        this.y += this.vy * dt;
       }
-    }
-    applyPlayerSelections();
-    applyUserScaleToPlayers();
 
-    window.addEventListener('storage', ()=>{
-      players[0]?.setMascot(selectedFor(0));
+      this._enforceBounds(dt);
+    }
+
+    off(){ return this.dir==='rtl' ? (this.x < -120) : (this.x > vw + 120); }
+    cleanup(){ if(this.img){ activeObstacleSprites.delete(this.img.src); } }
+
+    hit(player){
+      if(!player.alive || !this.img) return false;
+
+      const depth = depthMul('obstacle', this.y) * obstacleScaleMul();
+      const oH = this.img.height * depth;
+      const oW = this.img.width  * depth;
+      const oTop = this.y - oH*0.78;
+      const oBottom = oTop + oH;
+      const oLeft = this.x - oW*0.5;
+      const oRight = this.x + oW*0.5;
+
+      const oLowerFrac = Number.isFinite(CFG.collision?.obstacleLowerZone) ? CFG.collision.obstacleLowerZone : 0.40;
+      const oActiveTop = oTop + oH * (1 - oLowerFrac);
+      const oActiveBottom = oBottom;
+
+      const img = player.sprites.surfReady ? player.sprites.surf : null;
+      const pH = img ? img.height * scaleFor('mascot', player.y, img, player.USER_SCALE) : player.r*2;
+      const pW = img ? img.width  * scaleFor('mascot', player.y, img, player.USER_SCALE) : player.r*2;
+      const pTop = player.y - pH*0.78;
+      const pBottom = pTop + pH;
+      const pLeft  = player.x - pW*0.5;
+      const pRight = player.x + pW*0.5;
+
+      const pLowerFrac = Number.isFinite(CFG.collision?.limeLowerZone) ? CFG.collision.limeLowerZone : 0.40;
+      const pActiveTop = pTop + pH * (1 - pLowerFrac);
+      const pActiveBottom = pBottom;
+
+      const shrinkLR = (L, R, W) => { const pad = W * 0.08 * 0.5; return [L + pad, R - pad]; };
+      const [oL, oR] = shrinkLR(oLeft, oRight, oW);
+      const [pL, pR] = shrinkLR(pLeft, pRight, pW);
+
+      const horiz = Math.min(oR, pR) > Math.max(oL, pL);
+      const vert  = Math.min(oActiveBottom, pActiveBottom) > Math.max(oActiveTop, pActiveTop);
+      return horiz && vert;
+    }
+
+    draw(ctx){
+      if(!this.img) return;
+      ctx.save(); ctx.translate(this.x,this.y);
+      const depth = depthMul('obstacle', this.y) * obstacleScaleMul();
+      const h = this.img.height * depth;
+      const w = this.img.width  * depth;
+      ctx.drawImage(this.img, -w*0.5, -h*0.78, w, h);
+      ctx.restore();
+    }
+  }
+
+  // ===== Infinite levels, no resets between levels =====
+  const STATE={MENU:0,RUN:1,PAUSE:2,OVER:3};
+  let state=STATE.MENU;
+  let last=0, dt=0;
+  const LEVEL_SECONDS=(Number.isFinite(CFG.level?.seconds)?CFG.level.seconds:20);
+  let level=1, levelElapsed=0, BANNER_DURATION=1.8, levelBannerT=0, levelBannerText='';
+
+  function levelSpeedMultiplier(){ return Math.min(4, 1 + 0.04*(level-1)); }
+  function levelSpawnInterval(){ const base=1.8, min=0.45; const t = 1 - Math.exp(-(level-1)/10); return base - (base - min) * t; }
+
+  const players=[];
+  function applyPlayerSelections(){
+    // Force 1P on mobile
+    if(IS_MOBILE){ setTwoPlayer(false); }
+    const want2 = !IS_MOBILE && twoPlayerEnabled();
+    if(players.length===0){
+      players.push(new Player(0, selectedFor(0)));
+      if(want2) players.push(new Player(1, selectedFor(1)));
+    }else{
+      if(want2 && players.length===1){ players.push(new Player(1, selectedFor(1))); }
+      else if(!want2 && players.length===2){ players.pop(); }
+      players[0].setMascot(selectedFor(0));
       if(players[1]) players[1].setMascot(selectedFor(1));
-      const v=parseFloat(localStorage.getItem('mascotScale'));
-      if(Number.isFinite(v)){ CFG.mascot = CFG.mascot||{}; CFG.mascot.scale=v; applyUserScaleToPlayers(); }
-    });
-
-    const obstacles=[]; let spawnTimer=0;
-    function resetForNewGame(){
-      obstacles.length=0; spawnTimer=0; levelElapsed=0;
-      activeObstacleSprites.clear(); applyPlayerSelections();
-      players.forEach(p=>p.revive());
-      applyUserScaleToPlayers();
     }
-    function maybeSpawn(dt){
-      spawnTimer-=dt;
-      if(spawnTimer<=0){
-        const ob = new Obstacle(); if(ob.valid) obstacles.push(ob);
-        const base=levelSpawnInterval(); const variance=base*0.35;
-        spawnTimer=base + (Math.random()*2-1)*variance;
-      }
+  }
+  applyPlayerSelections();
+  applyUserScaleToPlayers(); // ensure initial scale is applied
+
+  window.addEventListener('storage', (e)=>{
+    players[0]?.setMascot(selectedFor(0));
+    if(players[1]) players[1].setMascot(selectedFor(1));
+    if(e.key==='mascotScale'){ const v=parseFloat(localStorage.getItem('mascotScale')); if(Number.isFinite(v)){ CFG.mascot = CFG.mascot||{}; CFG.mascot.scale=v; applyUserScaleToPlayers(); } }
+  });
+
+  const obstacles=[]; let spawnTimer=0;
+  function resetForNewGame(){
+    obstacles.length=0; spawnTimer=0; levelElapsed=0;
+    activeObstacleSprites.clear(); applyPlayerSelections();
+    players.forEach(p=>p.revive());
+    applyUserScaleToPlayers(); // keep scale after reset
+
+  }
+  function maybeSpawn(dt){
+    spawnTimer-=dt;
+    if(spawnTimer<=0){
+      const ob = new Obstacle(); if(ob.valid) obstacles.push(ob);
+      const base=levelSpawnInterval(); const variance=base*0.35;
+      spawnTimer=base + (Math.random()*2-1)*variance;
     }
+  }
 
-    function start(){ startMusic(); startWaves(); level=1; resetForNewGame(); state=STATE.RUN; updatePauseUI(); }
-    function pause(){ if(state===STATE.RUN){ state=STATE.PAUSE; updatePauseUI(); } }
-    function resume(){ if(state===STATE.PAUSE){ state=STATE.RUN; updatePauseUI(); } }
-    function togglePause(){ (state===STATE.RUN)?pause():resume(); }
-    function gameOver(){ state=STATE.OVER; updatePauseUI(); }
+  function start(){ startMusic(); startWaves(); level=1; resetForNewGame(); state=STATE.RUN; }
+  function pause(){ if(state===STATE.RUN){ state=STATE.PAUSE; } }
+  function resume(){ if(state===STATE.PAUSE){ state=STATE.RUN; } }
+  function togglePause(){ (state===STATE.RUN)?pause():resume(); }
+  function gameOver(){ state=STATE.OVER; }
 
-    function update(){
-      levelElapsed += dt;
-      players.forEach(p=>p.update(dt));
-      for(const o of obstacles) o.update(dt);
-      for(let i=obstacles.length-1;i>=0;i--){ if(obstacles[i].off()){ obstacles[i].cleanup(); obstacles.splice(i,1); } }
-      maybeSpawn(dt);
-      for(const o of obstacles){ for(const p of players){ if(o.hit(p)){ p.alive=false; } } }
-      if(players.every(p=>!p.alive)){ gameOver(); }
+  function update(){
+    levelElapsed += dt;
+    players.forEach(p=>p.update(dt));
+    for(const o of obstacles) o.update(dt);
+    for(let i=obstacles.length-1;i>=0;i--){ if(obstacles[i].off()){ obstacles[i].cleanup(); obstacles.splice(i,1); } }
+    maybeSpawn(dt);
+    for(const o of obstacles){ for(const p of players){ if(o.hit(p)){ p.alive=false; } } }
+    if(players.every(p=>!p.alive)){ gameOver(); }
 
-      if(levelElapsed>=LEVEL_SECONDS){
-        level++; levelElapsed = 0; levelBannerT = BANNER_DURATION; levelBannerText = 'LEVEL ' + level;
-      }
-      if(levelBannerT>0){ levelBannerT -= dt; }
+    if(levelElapsed>=LEVEL_SECONDS){
+      level++;
+      levelElapsed = 0;
+      levelBannerT = BANNER_DURATION; levelBannerText = 'LEVEL ' + level;
     }
+    if(levelBannerT>0){ levelBannerT -= dt; }
+  }
 
-    const doho=new Image(); let dohoReady=false; doho.onload=()=>dohoReady=true; doho.src='./Background/Doho.png';
-
-    function roundRectPath(ctx, x, y, w, h, r){
-      ctx.beginPath();
-      ctx.moveTo(x+r, y);
-      ctx.arcTo(x+w, y,   x+w, y+h, r);
-      ctx.arcTo(x+w, y+h, x,   y+h, r);
-      ctx.arcTo(x,   y+h, x,   y,   r);
-      ctx.arcTo(x,   y,   x+w, y,   r);
-      ctx.closePath();
-    }
-    function drawTextPanel(text, cx, cy, font, padX=14, padY=8){
-      ctx.save();
-      ctx.font = font;
-      const m = ctx.measureText(text);
-      const w = Math.ceil(m.width) + padX*2;
-      const h = Math.ceil((m.actualBoundingBoxAscent||18)+(m.actualBoundingBoxDescent||6)) + padY*2;
-      const x = Math.round(cx - w/2);
-      const y = Math.round(cy - h*0.66);
-      ctx.globalAlpha = 0.92;
-      ctx.fillStyle = '#061427cc';
-      ctx.strokeStyle = '#46e38a55';
-      ctx.lineWidth = 2;
-      roundRectPath(ctx, x, y, w, h, 12);
-      ctx.fill(); ctx.stroke();
-      ctx.globalAlpha = 1;
-      ctx.textAlign='center'; ctx.textBaseline='alphabetic';
-      ctx.shadowColor='#000'; ctx.shadowBlur=10;
-      ctx.fillStyle='#ffffff';
-      ctx.fillText(text, cx, y + h - padY - 2);
-      ctx.restore();
-    }
-    function drawCenter(title, sub){
-      ctx.save();
-      const cx = vw/2;
-      let cy = vh/2 - 14;
-      drawTextPanel(title, cx, cy, 'bold 42px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica');
-      cy = vh/2 + 28;
-      drawTextPanel(sub, cx, cy, '600 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica');
-      ctx.restore();
-    }
-    function drawLevelBanner(){
-      const w=vw, h=vh;
-      const elapsed = BANNER_DURATION - levelBannerT;
-      const alpha = elapsed < 0.25 ? (elapsed/0.25) : (elapsed > BANNER_DURATION-0.35 ? (BANNER_DURATION - elapsed)/0.35 : 1);
-      const bw = Math.min(680, Math.floor(w*0.72));
-      const bh = 120;
-      const bannerY = (CFG.ui?.levelBannerYPercent ?? 0.18);
-      const x = (w-bw)/2, y = h * bannerY;
-      ctx.save();
-      ctx.globalAlpha = 0.75 * Math.max(0,alpha);
-      ctx.fillStyle = '#061427';
-      ctx.strokeStyle = '#46e38a';
-      ctx.lineWidth = 3;
-      roundRectPath(ctx, x, y, bw, bh, 16);
-      ctx.fill(); ctx.stroke();
-      ctx.globalAlpha = Math.max(0,alpha);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 52px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.shadowColor = '#000';
-      ctx.shadowBlur = 18;
-      ctx.fillText(levelBannerText, w/2, y+bh/2);
-      ctx.restore();
-    }
-
-    function draw(){
-      function drawLevelPill(){
-        const label = `LEVEL ${level}`;
-        ctx.save();
-        const padX=12, padY=6;
-        ctx.font='12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
-        const w = ctx.measureText(label).width + padX*2;
-        const h = 26;
-        const x = 12, y = 10;
-        ctx.globalAlpha = 0.85;
-        ctx.fillStyle = '#0b1f39';
-        ctx.strokeStyle = '#46e38a';
-        ctx.lineWidth = 2;
-        roundRectPath(ctx, x, y, w, h, 14);
-        ctx.fill(); ctx.stroke();
-        ctx.globalAlpha = 1;
-        ctx.fillStyle='#c8ffe2';
-        ctx.textAlign='left'; ctx.textBaseline='middle';
-        ctx.fillText(label, x+padX, y + h/2 + 1);
-        ctx.restore();
-      }
-
-      const w=vw,h=vh;
-      ctx.clearRect(0,0,w,h);
-
-      // Background (parallax)
-      const dohoReady = doho.complete && doho.naturalWidth>0;
-      if(dohoReady){
-        const iw=doho.width, ih=doho.height;
-        const topDY = 0, topDH = Math.floor(h*0.42);
-        const midDY = Math.floor(h*0.42), midDH = Math.floor(h*0.38) + 2;
-        const sandDY = Math.floor(h*0.80) - 2, sandDH = Math.ceil(h*0.20) + 4;
-        const layers=[
-          { sy:0,            sh:Math.floor(ih*.42), dy:topDY,  dh:topDH,  speed:8  },
-          { sy:Math.floor(ih*.42), sh:Math.floor(ih*.38), dy:midDY,  dh:midDH,  speed:30 },
-          { sy:Math.floor(ih*.80), sh:Math.floor(ih*.20), dy:sandDY, dh:sandDH, speed:30 }
-        ];
-        const PORTRAIT = IS_MOBILE && (window.innerHeight > window.innerWidth);
-        for(const L of layers){
-          if(PORTRAIT){
-            const s = L.dh / L.sh;
-            const tileW = Math.max(1, Math.floor(iw * s));
-            const offsetPx = Math.floor((world.time * L.speed * s) % tileW);
-            let x = -offsetPx;
-            for(; x < w; x += tileW){
-              ctx.drawImage(doho, 0, L.sy, iw, L.sh, x, L.dy, tileW, L.dh);
-            }
-            ctx.drawImage(doho, 0, L.sy, iw, L.sh, x - tileW, L.dy, tileW, L.dh);
-          } else {
-            const sx=Math.floor((world.time*L.speed)%iw);
-            const sw1=iw-sx; const dw1=Math.floor(w*(sw1/iw));
-            if(sw1>0){ ctx.drawImage(doho, sx, L.sy, sw1, L.sh, 0, L.dy, dw1, L.dh); }
-            const sw2=sx; const dw2=w-dw1; if(sw2>0){ ctx.drawImage(doho, 0, L.sy, sw2, L.sh, dw1, L.dy, dw2, L.dh); }
+  // Background + readable overlays
+  const doho=new Image(); let dohoReady=false; doho.onload=()=>dohoReady=true; doho.src='./Background/Doho.png';
+  
+  function drawBG(ctx,w,h,t){
+    if(dohoReady){
+      const iw=doho.width, ih=doho.height;
+      const topDY = 0, topDH = Math.floor(h*0.42);
+      const midDY = Math.floor(h*0.42), midDH = Math.floor(h*0.38) + 2;
+      const sandDY = Math.floor(h*0.80) - 2, sandDH = Math.ceil(h*0.20) + 4;
+      const layers=[
+        { sy:0,            sh:Math.floor(ih*.42), dy:topDY,  dh:topDH,  speed:8  },
+        { sy:Math.floor(ih*.42), sh:Math.floor(ih*.38), dy:midDY,  dh:midDH,  speed:30 },
+        { sy:Math.floor(ih*.80), sh:Math.floor(ih*.20), dy:sandDY, dh:sandDH, speed:30 }
+      ];
+      const PORTRAIT = IS_MOBILE && (window.innerHeight > window.innerWidth);
+      for(const L of layers){
+        if(PORTRAIT){
+          const s = L.dh / L.sh;
+          const tileW = Math.max(1, Math.floor(iw * s));
+          const offsetPx = Math.floor((t * L.speed * s) % tileW);
+          let x = -offsetPx;
+          for(; x < w; x += tileW){
+            ctx.drawImage(doho, 0, L.sy, iw, L.sh, x, L.dy, tileW, L.dh);
           }
+          // also draw one tile to the left to cover any gap
+          ctx.drawImage(doho, 0, L.sy, iw, L.sh, x - tileW, L.dy, tileW, L.dh);
+        } else {
+          const sx=Math.floor((t*L.speed)%iw);
+          const sw1=iw-sx; const dw1=Math.floor(w*(sw1/iw));
+          if(sw1>0){ ctx.drawImage(doho, sx, L.sy, sw1, L.sh, 0, L.dy, dw1, L.dh); }
+          const sw2=sx; const dw2=w-dw1; if(sw2>0){ ctx.drawImage(doho, 0, L.sy, sw2, L.sh, dw1, L.dy, dw2, L.dh); }
         }
       }
-
-      const drawables=[...obstacles, ...players];
-      drawables.sort((a,b)=>(a.y||0)-(b.y||0));
-      for(const d of drawables){ d.draw?.(ctx); }
-
-      // HUD
-      ctx.save();
-      ctx.font='16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
-      ctx.fillStyle='#fff';
-      ctx.fillText(`Level: ${level}`,16,24);
-      const remain=Math.ceil(Math.max(0,LEVEL_SECONDS-levelElapsed));
-      ctx.fillText(`Time: ${String(Math.floor(remain/60)).padStart(2,'0')}:${String(remain%60).padStart(2,'0')}`,16,48);
-      if(!IS_MOBILE && twoPlayerEnabled()){
-        ctx.fillStyle='#b9ffd7'; ctx.fillText(`P1: ${players[0]?.name||'-'}`,16,72);
-        ctx.fillStyle='#ffe399'; ctx.fillText(`P2: ${players[1]?.name||'-'}`,16,92);
-      }else{
-        ctx.fillStyle='#b9ffd7'; ctx.fillText(`Mascot: ${players[0]?.name||'-'}`,16,72);
-      }
-      ctx.restore();
-
-      if(state===STATE.MENU){ drawCenter('Surf Lime', IS_MOBILE?'Tap & Hold to Rise':'Press Enter to Start'); }
-      if(state===STATE.PAUSE){ drawCenter('Paused', IS_MOBILE?'Tap to Resume':'Press Enter to Resume'); }
-      if(state===STATE.OVER){ drawCenter('Wipeout!', IS_MOBILE?'Tap to Play Again':'Press Enter to Play Again'); }
-      if(levelBannerT>0){ drawLevelBanner(); }
     }
+  }
 
-    function loop(t){
-      dt=Math.min(0.033, (t-last)/1000 || 0);
-      last=t;
-      if(state===STATE.RUN){ world.time += dt; update(); }
-      draw();
-      requestAnimationFrame(loop);
+
+  function roundRectPath(ctx, x, y, w, h, r){
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y,   x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x,   y+h, r);
+    ctx.arcTo(x,   y+h, x,   y,   r);
+    ctx.arcTo(x,   y,   x+w, y,   r);
+    ctx.closePath();
+  }
+  function drawTextPanel(text, cx, cy, font, padX=14, padY=8){
+    ctx.save();
+    ctx.font = font;
+    const m = ctx.measureText(text);
+    const w = Math.ceil(m.width) + padX*2;
+    const h = Math.ceil((m.actualBoundingBoxAscent||18)+(m.actualBoundingBoxDescent||6)) + padY*2;
+    const x = Math.round(cx - w/2);
+    const y = Math.round(cy - h*0.66);
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = '#061427cc';
+    ctx.strokeStyle = '#46e38a55';
+    ctx.lineWidth = 2;
+    roundRectPath(ctx, x, y, w, h, 12);
+    ctx.fill(); ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.shadowColor='#000'; ctx.shadowBlur=10;
+    ctx.fillStyle='#ffffff';
+    ctx.fillText(text, cx, y + h - padY - 2);
+    ctx.restore();
+  }
+  function drawCenter(title, sub){
+    ctx.save();
+    const cx = vw/2;
+    let cy = vh/2 - 14;
+    drawTextPanel(title, cx, cy, 'bold 42px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica');
+    cy = vh/2 + 28;
+    drawTextPanel(sub, cx, cy, '600 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica');
+    ctx.restore();
+  }
+  function drawLevelBanner(){
+    const w=vw, h=vh;
+    const elapsed = BANNER_DURATION - levelBannerT;
+    const alpha = elapsed < 0.25 ? (elapsed/0.25) : (elapsed > BANNER_DURATION-0.35 ? (BANNER_DURATION - elapsed)/0.35 : 1);
+    const bw = Math.min(680, Math.floor(w*0.72));
+    const bh = 120;
+    const bannerY = (CFG.ui?.levelBannerYPercent ?? 0.18);
+    const x = (w-bw)/2, y = h * bannerY;
+    ctx.save();
+    ctx.globalAlpha = 0.75 * Math.max(0,alpha);
+    ctx.fillStyle = '#061427';
+    ctx.strokeStyle = '#46e38a';
+    ctx.lineWidth = 3;
+    roundRectPath(ctx, x, y, bw, bh, 16);
+    ctx.fill(); ctx.stroke();
+    ctx.globalAlpha = Math.max(0,alpha);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 52px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 18;
+    ctx.fillText(levelBannerText, w/2, y+bh/2);
+    ctx.restore();
+  }
+
+  function draw(){
+  
+  function drawLevelPill(){
+    const label = `LEVEL ${level}`;
+    ctx.save();
+    const padX=12, padY=6;
+    ctx.font='12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
+    const w = ctx.measureText(label).width + padX*2;
+    const h = 26;
+    const x = 12, y = 10;
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#0b1f39';
+    ctx.strokeStyle = '#46e38a';
+    ctx.lineWidth = 2;
+    roundRectPath(ctx, x, y, w, h, 14);
+    ctx.fill(); ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle='#c8ffe2';
+    ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(label, x+padX, y + h/2 + 1);
+    ctx.restore();
+  }
+
+    const w=vw,h=vh;
+    ctx.clearRect(0,0,w,h);
+    drawBG(ctx,w,h,world.time);
+
+    const drawables=[...obstacles, ...players];
+    drawables.sort((a,b)=>(a.y||0)-(b.y||0));
+    for(const d of drawables){ d.draw?.(ctx); }
+
+    // HUD
+    ctx.save();
+    ctx.font='16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
+    ctx.fillStyle='#fff';
+    drawLevelPill();
+    const remain=Math.ceil(Math.max(0,LEVEL_SECONDS-levelElapsed));
+    ctx.fillText(`Time: ${String(Math.floor(remain/60)).padStart(2,'0')}:${String(remain%60).padStart(2,'0')}`,16,48);
+    if(!IS_MOBILE && twoPlayerEnabled()){
+      ctx.fillStyle='#b9ffd7'; ctx.fillText(`P1: ${players[0]?.name||'-'}`,16,72);
+      ctx.fillStyle='#ffe399'; ctx.fillText(`P2: ${players[1]?.name||'-'}`,16,92);
+    }else{
+      ctx.fillStyle='#b9ffd7'; ctx.fillText(`Mascot: ${players[0]?.name||'-'}`,16,72);
     }
-    updatePauseUI();
+    ctx.restore();
+
+    // Overlays (mobile has "Tap" copy)
+    if(state===STATE.MENU){ drawCenter('Surf Lime', IS_MOBILE?'Tap to Start':'Press Enter to Start'); }
+    if(state===STATE.PAUSE){ drawCenter('Paused', IS_MOBILE?'Tap to Resume':'Press Enter to Resume'); }
+    if(state===STATE.OVER){ drawCenter('Wipeout!', IS_MOBILE?'Tap to Play Again':'Press Enter to Play Again'); }
+    if(levelBannerT>0){ drawLevelBanner(); }
+  }
+
+  function loop(t){
+    dt=Math.min(0.033, (t-last)/1000 || 0);
+    last=t;
+    if(state===STATE.RUN){ world.time += dt; update(); }
+    draw();
     requestAnimationFrame(loop);
-  })();
-  </script>
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
 </body>
 </html>
