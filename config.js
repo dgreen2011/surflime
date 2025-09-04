@@ -59,10 +59,10 @@
     // NEW: Mobile shrink-by-percent (applied on top of desktop values)
     mobile: {
       // Mobile-only: where the mascot 'rests' when not holding (distance above bottom bound)
-      holdRise: { baseOffsetFromBottomPx: 18 },
+      holdRise: { baseOffsetFromBottomPx: 20 },
       scaleDownPercent: {
-        mascot: 15,   // e.g., 15 -> render mascot at 85% of desktop size
-        obstacle: 15  // e.g., 15 -> render obstacles at 85% of desktop percent
+        mascot: 25,   // e.g., 15 -> render mascot at 85% of desktop size
+        obstacle: 25  // e.g., 15 -> render obstacles at 85% of desktop percent
       }
     },
 
