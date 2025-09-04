@@ -26,7 +26,18 @@
 </head>
 <body>
   <canvas id="game" width="1024" height="576"></canvas>
+
   <div class="icon-row">
+    <!-- NEW: Pause button (left-most) -->
+    <button id="btnPause" class="icon-btn" title="Start" aria-label="Start">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="pauseIcon">
+        <rect x="6" y="4" width="4" height="16"></rect>
+        <rect x="14" y="4" width="4" height="16"></rect>
+      </svg>
+      <span id="pauseLabel">Start</span>
+    </button>
+
     <button id="btnMute" class="icon-btn" title="Mute" aria-label="Mute">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -54,6 +65,38 @@
   // ===== Mobile detect =====
   const IS_MOBILE = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
 
+  // --- Pause button wiring (NEW) ---
+  const pauseBtn = document.getElementById('btnPause');
+  const pauseLbl = document.getElementById('pauseLabel');
+  function setPauseUI(text, title){
+    if(!pauseBtn) return;
+    pauseLbl.textContent = text;
+    pauseBtn.title = title || text;
+    // Swap icon for play vs pause
+    const svg = pauseBtn.querySelector('#pauseIcon');
+    if(svg){
+      if(text === 'Resume' || text === 'Start'){
+        svg.innerHTML = '<polygon points="8 5 19 12 8 19 8 5"></polygon>'; // play
+      } else {
+        svg.innerHTML = '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>'; // pause
+      }
+    }
+  }
+  function updatePauseUI(){
+    if(state===STATE.RUN) setPauseUI('Pause','Pause');
+    else if(state===STATE.PAUSE) setPauseUI('Resume','Resume');
+    else setPauseUI('Start','Start');
+  }
+  if(pauseBtn){
+    pauseBtn.addEventListener('click', (e)=>{
+      e.preventDefault();
+      if(state===STATE.RUN){ pause(); }
+      else if(state===STATE.PAUSE){ resume(); }
+      else if(state===STATE.MENU || state===STATE.OVER){ start(); }
+      updatePauseUI();
+    });
+  }
+
   // --- Mute button wiring ---
   const muteBtn = document.getElementById('btnMute');
   function updateMuteUI(){
@@ -63,15 +106,22 @@
   }
   if(muteBtn){
     muteBtn.addEventListener('click',(e)=>{ e.preventDefault(); toggleMute(); updateMuteUI(); });
-    // init label after any audio init
     setTimeout(updateMuteUI, 0);
   }
 
-  // --- Apply mascot scale from config.js and keep it in sync ---
+  // ===== Config helpers =====
+  const CFG = window.SURFLIME_CONFIG || { };
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+  // --- Apply mascot scale from config.js and keep it in sync (UPDATED: supports mobile shrink %) ---
   function applyUserScaleToPlayers(){
     const desktop = Number.isFinite(CFG.mascot?.scale) ? CFG.mascot.scale : 1;
-    const mobile  = Number.isFinite(CFG.mascot?.scaleMobile) ? CFG.mascot.scaleMobile : desktop;
-    const s = IS_MOBILE ? mobile : desktop;
+    const shrinkPct = Number.isFinite(CFG.mobile?.scaleDownPercent?.mascot) ? CFG.mobile.scaleDownPercent.mascot : null;
+    const derivedMobile = Number.isFinite(CFG.mascot?.scaleMobile)
+      ? CFG.mascot.scaleMobile
+      : (shrinkPct!=null ? desktop * (1 - clamp(shrinkPct,0,100)/100) : desktop);
+    const s = IS_MOBILE ? derivedMobile : desktop;
     (players||[]).forEach(p=> p.USER_SCALE = s);
   }
 
@@ -101,25 +151,26 @@
     world.seaLevel = vh * 0.58;
   }
   addEventListener('resize', resizeDPR);
-  addEventListener('focus', ()=>{ applyPlayerSelections(); applyUserScaleToPlayers(); });
+  addEventListener('focus', ()=>{ applyPlayerSelections(); applyUserScaleToPlayers(); updatePauseUI(); });
   resizeDPR();
 
-  // Config helpers
-  const CFG = window.SURFLIME_CONFIG || { };
-  const lerp=(a,b,t)=>a+(b-a)*t;
-  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  function topLimitPx(){   const p=(CFG.limits?.topPercent??0.42);   return vh * Math.min(0.98, Math.max(0, p)); }
+  function topLimitPx(){   const p=(CFG.limits?.topPercent??0.20);   return vh * Math.min(0.98, Math.max(0, p)); }
   function bottomLimitPx(){
-    const p = (CFG.limits?.bottomPercent ?? 0.98);
+    const p = (CFG.limits?.bottomPercent ?? 0.80);
     const desiredPx = vh * Math.min(0.999, Math.max(0, p));
     return Math.min(vh * 0.999, Math.max(topLimitPx() + 0.02*vh, desiredPx));
   }
+
   function obstacleScaleMul(){
     const desk = Number.isFinite(CFG.obstacle?.scalePercent) ? CFG.obstacle.scalePercent : 100;
-    const mobi = Number.isFinite(CFG.obstacle?.scalePercentMobile) ? CFG.obstacle.scalePercentMobile : desk;
-    const p = IS_MOBILE ? mobi : desk;
+    const shrinkPct = Number.isFinite(CFG.mobile?.scaleDownPercent?.obstacle) ? CFG.mobile.scaleDownPercent.obstacle : null;
+    const derivedMobile = Number.isFinite(CFG.obstacle?.scalePercentMobile)
+      ? CFG.obstacle.scalePercentMobile
+      : (shrinkPct!=null ? desk * (1 - clamp(shrinkPct,0,100)/100) : desk);
+    const p = IS_MOBILE ? derivedMobile : desk;
     return Math.max(0.1, Math.min(3, p / 100));
   }
+
   function depthMul(kind,y){
     const top = topLimitPx(), bottom = bottomLimitPx();
     const t = (bottom>top) ? clamp((y-top)/(bottom-top),0,1) : 0;
@@ -153,13 +204,10 @@
   async function unlockAudio(){
     if(audioUnlocked) return;
     audioUnlocked = true;
-
     initMusic(); initWaves();
-
     const waveVol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25;
 
     try { music.muted = true; await music.play(); } catch(_) {}
-
     try {
       for(const p of ['./Sfx/Waves.mp3','./Music/Waves.mp3']){
         try { waves.muted = true; waves.src = p; await waves.play(); break; } catch(_) {}
@@ -171,13 +219,7 @@
       waves.muted = muted; waves.volume = muted ? 0 : waveVol;
     });
   }
-
-  function startMusic(){
-    initMusic();
-    music.muted = muted;
-    music.volume = muted ? 0 : 0.35;
-    music.play().catch(()=>{}); // if still locked, unlockAudio will handle it
-  }
+  function startMusic(){ initMusic(); music.muted = muted; music.volume = muted ? 0 : 0.35; music.play().catch(()=>{}); }
   function startWaves(){
     initWaves();
     const tryPaths = ['./Sfx/Waves.mp3','./Music/Waves.mp3'];
@@ -188,9 +230,7 @@
       try { await waves.play(); } catch { tryNext(); }
     };
     const vol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25;
-    waves.muted = muted;
-    waves.volume = muted ? 0 : vol;
-    tryNext();
+    waves.muted = muted; waves.volume = muted ? 0 : vol; tryNext();
   }
   function toggleMute(){
     muted=!muted;
@@ -198,8 +238,6 @@
     if(waves){ const vol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25;
       waves.muted = muted; waves.volume = muted ? 0 : vol; }
   }
-
-  // Bind unlock to first real gesture (tap/click or key)
   document.addEventListener('pointerdown', unlockAudio, { once:true });
   document.addEventListener('keydown', unlockAudio, { once:true });
 
@@ -242,6 +280,7 @@
       if(state===STATE.RUN){ togglePause(); }
       else if(state===STATE.PAUSE){ resume(); }
       else if(state===STATE.MENU || state===STATE.OVER){ start(); }
+      updatePauseUI();
     }
   });
   addEventListener('keyup',e=>{
@@ -254,11 +293,14 @@
     if(e.code==='KeyD')INPUT[1].boost=false;
   });
 
-  // --- Mobile gestures (pointer events) ---
-  const touchPointers = new Map(); // id -> {y}
+  // --- Mobile gestures (UPDATED: add left/right + smoother motion) ---
+  const touchPointers = new Map(); // id -> {x,y}
   let upDownClearTimer=null;
   const SWIPE_EPS = 6;        // px change to count as up/down
   const CLEAR_AFTER = 160;    // ms to release up/down after last movement
+
+  // Smooth analog accumulators for mobile
+  const mobileAnalog = { vx:0, vy:0 }; // screen-space deltas accumulated; decayed each frame
 
   function setP1(up,down){ INPUT[0].up=up; INPUT[0].down=down; }
   function clearUpDownSoon(){
@@ -269,38 +311,41 @@
   function onPointerDown(e){
     if(e.pointerType!=='touch' && !IS_MOBILE) return;
     e.preventDefault();
-    touchPointers.set(e.pointerId, { y:e.clientY });
+    touchPointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
     // Tap to start/resume on mobile
-    if(IS_MOBILE && (state===STATE.MENU || state===STATE.OVER)){ start(); }
-    if(IS_MOBILE && state===STATE.PAUSE){ resume(); }
+    if(IS_MOBILE && (state===STATE.MENU || state===STATE.OVER)){ start(); updatePauseUI(); }
+    if(IS_MOBILE && state===STATE.PAUSE){ resume(); updatePauseUI(); }
   }
   function onPointerMove(e){
     if(!touchPointers.has(e.pointerId)) return;
     e.preventDefault();
     const rec = touchPointers.get(e.pointerId);
+    const dx = e.clientX - rec.x;
     const dy = e.clientY - rec.y;
+
+    // Accumulate analog movement for smoothing (both axes)
+    mobileAnalog.vx += dx;
+    mobileAnalog.vy += dy;
+
+    // Keep legacy up/down swipe toggles active (for familiarity)
     if(Math.abs(dy) > SWIPE_EPS){
       if(dy < 0)      setP1(true,false);
       else if(dy > 0) setP1(false,true);
-      rec.y = e.clientY;
       clearUpDownSoon();
     }
+
+    rec.x = e.clientX; rec.y = e.clientY;
   }
   function onPointerUp(e){
     if(!touchPointers.has(e.pointerId)) return;
     e.preventDefault();
     touchPointers.delete(e.pointerId);
-    if(touchPointers.size===0){
-      clearUpDownSoon();
-    }
+    if(touchPointers.size===0){ clearUpDownSoon(); }
   }
-  // Attach to canvas only
   canvas.addEventListener('pointerdown', onPointerDown, {passive:false});
   canvas.addEventListener('pointermove', onPointerMove, {passive:false});
   addEventListener('pointerup', onPointerUp, {passive:false});
   addEventListener('pointercancel', onPointerUp, {passive:false});
-
-  // Fallbacks for very old iOS Safari
   canvas.addEventListener('gesturestart', e=>e.preventDefault());
   canvas.addEventListener('gesturechange', e=>e.preventDefault());
   canvas.addEventListener('gestureend', e=>e.preventDefault());
@@ -348,7 +393,7 @@
       const pressed=INPUT[this.index].boost;
       this.boost=clamp(this.boost + (pressed?accel:-decay)*dt,0,1);
 
-      const mobileMul = IS_MOBILE ? 1.25 : 1.0;
+      const mobileMul = IS_MOBILE ? 1.10 : 1.0; // slightly lower accel for smoother feel
       let ay=0; if(INPUT[this.index].up) ay-=700*mobileMul; if(INPUT[this.index].down) ay+=700*mobileMul;
       this.vy += ay*dt;
       const maxV=210*mobileMul; this.vy=clamp(this.vy,-maxV,maxV);
@@ -356,6 +401,17 @@
         if(Math.abs(this.vy) < 800*dt) this.vy=0; else this.vy -= Math.sign(this.vy)*800*dt;
       }
       this.y += this.vy*dt;
+
+      // NEW: apply smooth analog swipe deltas on mobile (both axes) + decay
+      if(IS_MOBILE){
+        // Gains tuned for “glide”, independent of DPR
+        this.x += mobileAnalog.vx * 2.2 * dt;
+        this.y += mobileAnalog.vy * 2.0 * dt;
+        // Exponential decay to smooth out jerkiness
+        const decay = Math.pow(0.12, dt); // ≈ quick decay per second
+        mobileAnalog.vx *= (1 - decay);
+        mobileAnalog.vy *= (1 - decay);
+      }
 
       const pumpForce = Math.sin(this.pumpPhase) * 40 * this.boost;
       this.pumpPhase += (4 + 4*this.boost) * dt;
@@ -375,8 +431,15 @@
       const topPx = topLimitPx(), botPx = bottomLimitPx();
       const minY = Math.max(hh, topPx + topOffset);
       const maxY = Math.min(vh - hh, botPx - hh);
-      this.x = Math.max(Math.min(this.x, vw - hw), Math.max(hw, this.baseX));
+
+      // UPDATED: allow left movement on mobile; desktop keeps baseX as minimum
+      const minXDesktop = Math.max(hw, this.baseX);
+      const minXMobile  = hw + 8;
+      const minX = IS_MOBILE ? minXMobile : minXDesktop;
+
+      this.x = Math.max(Math.min(this.x, vw - hw), minX);
       this.y = Math.max(Math.min(this.y, maxY), minY);
+
       this.roll += (((this.vy)*0.003 + (this.boost>0?0.12:0)) - this.roll)*dt*6;
     }
     draw(ctx){
@@ -389,7 +452,7 @@
     }
   }
 
-  // ===== Obstacles (includes smooth bounds) =====
+  // ===== Obstacles (unchanged except using new obstacleScaleMul) =====
   const activeObstacleSprites = new Set();
   const imagesLTR = [], imagesRTL = []; let bagLTR=[], bagRTL=[];
   function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
@@ -442,7 +505,6 @@
       this.valid=true;
     }
 
-    // Smooth bounds & motion
     _enforceBounds(dt){
       const topPx=topLimitPx(), botPx=bottomLimitPx();
       const depth = depthMul('obstacle', this.y) * obstacleScaleMul();
@@ -451,9 +513,7 @@
       const minCenter = topPx + h*0.78 + 2;
       const maxCenter = botPx - (h - h*0.78) - 2;
 
-      const k = 12;
-      const damp = 0.15;
-
+      const k = 12, damp = 0.15;
       if(this.y < minCenter){
         const pen = (minCenter - this.y);
         this.y += pen * Math.min(1, k*dt);
@@ -558,7 +618,6 @@
 
   const players=[];
   function applyPlayerSelections(){
-    // Force 1P on mobile
     if(IS_MOBILE){ setTwoPlayer(false); }
     const want2 = !IS_MOBILE && twoPlayerEnabled();
     if(players.length===0){
@@ -585,7 +644,7 @@
     obstacles.length=0; spawnTimer=0; levelElapsed=0;
     activeObstacleSprites.clear(); applyPlayerSelections();
     players.forEach(p=>p.revive());
-    applyUserScaleToPlayers(); // keep scale after reset
+    applyUserScaleToPlayers();
   }
   function maybeSpawn(dt){
     spawnTimer-=dt;
@@ -596,11 +655,11 @@
     }
   }
 
-  function start(){ startMusic(); startWaves(); level=1; resetForNewGame(); state=STATE.RUN; }
-  function pause(){ if(state===STATE.RUN){ state=STATE.PAUSE; } }
-  function resume(){ if(state===STATE.PAUSE){ state=STATE.RUN; } }
+  function start(){ startMusic(); startWaves(); level=1; resetForNewGame(); state=STATE.RUN; updatePauseUI(); }
+  function pause(){ if(state===STATE.RUN){ state=STATE.PAUSE; updatePauseUI(); } }
+  function resume(){ if(state===STATE.PAUSE){ state=STATE.RUN; updatePauseUI(); } }
   function togglePause(){ (state===STATE.RUN)?pause():resume(); }
-  function gameOver(){ state=STATE.OVER; }
+  function gameOver(){ state=STATE.OVER; updatePauseUI(); }
 
   function update(){
     levelElapsed += dt;
@@ -619,41 +678,8 @@
     if(levelBannerT>0){ levelBannerT -= dt; }
   }
 
-  // Background
   const doho=new Image(); let dohoReady=false; doho.onload=()=>dohoReady=true; doho.src='./Background/Doho.png';
-  function drawBG(ctx,w,h,t){
-    if(dohoReady){
-      const iw=doho.width, ih=doho.height;
-      const topDY = 0, topDH = Math.floor(h*0.42);
-      const midDY = Math.floor(h*0.42), midDH = Math.floor(h*0.38) + 2;
-      const sandDY = Math.floor(h*0.80) - 2, sandDH = Math.ceil(h*0.20) + 4;
-      const layers=[
-        { sy:0,            sh:Math.floor(ih*.42), dy:topDY,  dh:topDH,  speed:8  },
-        { sy:Math.floor(ih*.42), sh:Math.floor(ih*.38), dy:midDY,  dh:midDH,  speed:30 },
-        { sy:Math.floor(ih*.80), sh:Math.floor(ih*.20), dy:sandDY, dh:sandDH, speed:30 }
-      ];
-      const PORTRAIT = IS_MOBILE && (window.innerHeight > window.innerWidth);
-      for(const L of layers){
-        if(PORTRAIT){
-          const s = L.dh / L.sh;
-          const tileW = Math.max(1, Math.floor(iw * s));
-          const offsetPx = Math.floor((t * L.speed * s) % tileW);
-          let x = -offsetPx;
-          for(; x < w; x += tileW){
-            ctx.drawImage(doho, 0, L.sy, iw, L.sh, x, L.dy, tileW, L.dh);
-          }
-          ctx.drawImage(doho, 0, L.sy, iw, L.sh, x - tileW, L.dy, tileW, L.dh);
-        } else {
-          const sx=Math.floor((t*L.speed)%iw);
-          const sw1=iw-sx; const dw1=Math.floor(w*(sw1/iw));
-          if(sw1>0){ ctx.drawImage(doho, sx, L.sy, sw1, L.sh, 0, L.dy, dw1, L.dh); }
-          const sw2=sx; const dw2=w-dw1; if(sw2>0){ ctx.drawImage(doho, 0, L.sy, sw2, L.sh, dw1, L.dy, dw2, L.dh); }
-        }
-      }
-    }
-  }
 
-  // Reusable rounded rect path
   function roundRectPath(ctx, x, y, w, h, r){
     ctx.beginPath();
     ctx.moveTo(x+r, y);
@@ -663,8 +689,6 @@
     ctx.arcTo(x,   y,   x+w, y,   r);
     ctx.closePath();
   }
-
-  // Simple center messages
   function drawTextPanel(text, cx, cy, font, padX=14, padY=8){
     ctx.save();
     ctx.font = font;
@@ -691,99 +715,92 @@
     const cx = vw/2;
     let cy = vh/2 - 14;
     drawTextPanel(title, cx, cy, 'bold 42px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica');
-    if(sub){
-      cy = vh/2 + 28;
-      drawTextPanel(sub, cx, cy, '600 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica');
-    }
+    cy = vh/2 + 28;
+    drawTextPanel(sub, cx, cy, '600 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica');
     ctx.restore();
   }
-
-  // NEW: modern level banner (glass + neon + pop)
   function drawLevelBanner(){
     const w=vw, h=vh;
     const elapsed = BANNER_DURATION - levelBannerT;
-    // fade in / out
     const alpha = elapsed < 0.25 ? (elapsed/0.25) : (elapsed > BANNER_DURATION-0.35 ? (BANNER_DURATION - elapsed)/0.35 : 1);
-    const bw = Math.min(700, Math.floor(w*0.76));
-    const bh = 128;
+    const bw = Math.min(680, Math.floor(w*0.72));
+    const bh = 120;
     const bannerY = (CFG.ui?.levelBannerYPercent ?? 0.18);
-
-    // subtle pop-in scale
-    const tIn = Math.min(1, elapsed/0.28);
-    const easeOutBack = (x)=>{ const c1=1.70158, c3=c1+1; return 1 + c3*Math.pow(x-1,3) + c1*Math.pow(x-1,2); };
-    const scale = 0.92 + 0.08*easeOutBack(tIn);
-
+    const x = (w-bw)/2, y = h * bannerY;
     ctx.save();
-    ctx.globalAlpha = 0.85 * Math.max(0,alpha);
-    ctx.translate(w/2, h*bannerY + bh/2);
-    ctx.scale(scale, scale);
-
-    // panel
-    const x = -bw/2, y = -bh/2;
-    ctx.fillStyle = '#061427d0';
-    roundRectPath(ctx, x, y, bw, bh, 18);
-    ctx.fill();
-
-    // neon gradient stroke
-    const g = ctx.createLinearGradient(x, y, x+bw, y+bh);
-    g.addColorStop(0,   '#3be08f');
-    g.addColorStop(0.5, '#76f7c1');
-    g.addColorStop(1,   '#3be08f');
-    ctx.strokeStyle = g;
+    ctx.globalAlpha = 0.75 * Math.max(0,alpha);
+    ctx.fillStyle = '#061427';
+    ctx.strokeStyle = '#46e38a';
     ctx.lineWidth = 3;
-    roundRectPath(ctx, x, y, bw, bh, 18);
-    ctx.stroke();
-
-    // accent underline bar
+    roundRectPath(ctx, x, y, bw, bh, 16);
+    ctx.fill(); ctx.stroke();
     ctx.globalAlpha = Math.max(0,alpha);
-    const barW = Math.min(bw-40, 520);
-    const barH = 6;
-    const barX = -barW/2;
-    const barY = 18;
-    const g2 = ctx.createLinearGradient(barX, 0, barX+barW, 0);
-    g2.addColorStop(0,'#ffffff22'); g2.addColorStop(1,'#46e38a');
-    ctx.fillStyle = g2;
-    roundRectPath(ctx, barX, barY, barW, barH, 3);
-    ctx.fill();
-
-    // text
-    ctx.shadowColor = '#000';
-    ctx.shadowBlur = 18;
     ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 52px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '800 56px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
-    ctx.fillText(levelBannerText, 0, -8);
-
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 18;
+    ctx.fillText(levelBannerText, w/2, y+bh/2);
     ctx.restore();
   }
 
-  // NEW: loader gate — wait for P1 surf sprite
-  function mascotReady(){
-    return !!(players[0] && players[0].sprites && players[0].sprites.surfReady);
-  }
-
   function draw(){
-    // (inner helper replaced: Level now matches HUD style)
-    function drawLevelLabel(){
+    function drawLevelPill(){
+      const label = `LEVEL ${level}`;
       ctx.save();
-      ctx.font='16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
-      ctx.fillStyle='#ffffff';
-      ctx.fillText(`Level: ${level}`,16,24);
+      const padX=12, padY=6;
+      ctx.font='12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
+      const w = ctx.measureText(label).width + padX*2;
+      const h = 26;
+      const x = 12, y = 10;
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = '#0b1f39';
+      ctx.strokeStyle = '#46e38a';
+      ctx.lineWidth = 2;
+      roundRectPath(ctx, x, y, w, h, 14);
+      ctx.fill(); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle='#c8ffe2';
+      ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillText(label, x+padX, y + h/2 + 1);
       ctx.restore();
     }
 
     const w=vw,h=vh;
     ctx.clearRect(0,0,w,h);
-    drawBG(ctx,w,h,world.time);
 
-    // Show loader until P1 mascot is ready
-    if(!mascotReady()){
-      drawCenter('Loading...', '');
-      return;
+    // Background scroll (split into layers for readability)
+    if(dohoReady){
+      const iw=doho.width, ih=doho.height;
+      const topDY = 0, topDH = Math.floor(h*0.42);
+      const midDY = Math.floor(h*0.42), midDH = Math.floor(h*0.38) + 2;
+      const sandDY = Math.floor(h*0.80) - 2, sandDH = Math.ceil(h*0.20) + 4;
+      const layers=[
+        { sy:0,            sh:Math.floor(ih*.42), dy:topDY,  dh:topDH,  speed:8  },
+        { sy:Math.floor(ih*.42), sh:Math.floor(ih*.38), dy:midDY,  dh:midDH,  speed:30 },
+        { sy:Math.floor(ih*.80), sh:Math.floor(ih*.20), dy:sandDY, dh:sandDH, speed:30 }
+      ];
+      const PORTRAIT = IS_MOBILE && (window.innerHeight > window.innerWidth);
+      for(const L of layers){
+        if(PORTRAIT){
+          const s = L.dh / L.sh;
+          const tileW = Math.max(1, Math.floor(iw * s));
+          const offsetPx = Math.floor((world.time * L.speed * s) % tileW);
+          let x = -offsetPx;
+          for(; x < w; x += tileW){
+            ctx.drawImage(doho, 0, L.sy, iw, L.sh, x, L.dy, tileW, L.dh);
+          }
+          ctx.drawImage(doho, 0, L.sy, iw, L.sh, x - tileW, L.dy, tileW, L.dh);
+        } else {
+          const sx=Math.floor((world.time*L.speed)%iw);
+          const sw1=iw-sx; const dw1=Math.floor(w*(sw1/iw));
+          if(sw1>0){ ctx.drawImage(doho, sx, L.sy, sw1, L.sh, 0, L.dy, dw1, L.dh); }
+          const sw2=sx; const dw2=w-dw1; if(sw2>0){ ctx.drawImage(doho, 0, L.sy, sw2, L.sh, dw1, L.dy, dw2, L.dh); }
+        }
+      }
     }
 
-    // Normal drawables
     const drawables=[...obstacles, ...players];
     drawables.sort((a,b)=>(a.y||0)-(b.y||0));
     for(const d of drawables){ d.draw?.(ctx); }
@@ -792,7 +809,7 @@
     ctx.save();
     ctx.font='16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
     ctx.fillStyle='#fff';
-    drawLevelLabel();
+    drawLevelPill();
     const remain=Math.ceil(Math.max(0,LEVEL_SECONDS-levelElapsed));
     ctx.fillText(`Time: ${String(Math.floor(remain/60)).padStart(2,'0')}:${String(remain%60).padStart(2,'0')}`,16,48);
     if(!IS_MOBILE && twoPlayerEnabled()){
@@ -803,7 +820,6 @@
     }
     ctx.restore();
 
-    // Overlays (mobile has "Tap" copy)
     if(state===STATE.MENU){ drawCenter('Surf Lime', IS_MOBILE?'Tap to Start':'Press Enter to Start'); }
     if(state===STATE.PAUSE){ drawCenter('Paused', IS_MOBILE?'Tap to Resume':'Press Enter to Resume'); }
     if(state===STATE.OVER){ drawCenter('Wipeout!', IS_MOBILE?'Tap to Play Again':'Press Enter to Play Again'); }
@@ -817,6 +833,7 @@
     draw();
     requestAnimationFrame(loop);
   }
+  updatePauseUI();
   requestAnimationFrame(loop);
 })();
 </script>
