@@ -5,6 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Surf Lime • Settings</title>
   <link rel="prefetch" as="image" href="./Background/Doho.png">
+  <script>
+    // Prefetch the user's selected mascot (Player 1) so it’s ready on Play
+    (function(){
+      try{
+        let n = localStorage.getItem('selectedMascotP1') || localStorage.getItem('selectedMascot') || 'Lime';
+        if(n === 'Pinapple') n = 'Pineapple'; // historical typo guard
+        const base = `./Mascots/${n}/${n}`;
+        const urls = [`${base}Surfer.png`, `${base}Surf.png`, `${base}Fall.png`];
+        for(const href of urls){
+          const l = document.createElement('link');
+          l.rel = 'prefetch'; l.as = 'image'; l.href = href;
+          document.head.appendChild(l);
+        }
+      }catch(_){}
+    })();
+  </script>
   <style>
     :root{ --bg:#0b1320; --panel:#0f1e35; --ink:#eaf2ff; --accent:#46e38a; --muted:#94a3b8; }
     *{box-sizing:border-box}
