@@ -5,6 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Surf Lime</title>
   <link rel="preload" as="image" href="./Background/Doho.png" fetchpriority="high">
+  <script>
+    // Preload Player 1's selected mascot images so it appears immediately
+    (function(){
+      try{
+        let n = localStorage.getItem('selectedMascotP1') || localStorage.getItem('selectedMascot') || 'Lime';
+        if(n === 'Pinapple') n = 'Pineapple'; // historical typo guard
+        const base = `./Mascots/${n}/${n}`;
+        const urls = [
+          { href: `${base}Surfer.png`, priority: 'high' },
+          { href: `${base}Surf.png`,   priority: 'high' },
+          { href: `${base}Fall.png`,   priority: 'low'  }
+        ];
+        for(const {href, priority} of urls){
+          const l = document.createElement('link');
+          l.rel = 'preload'; l.as = 'image'; l.href = href; l.setAttribute('fetchpriority', priority);
+          document.head.appendChild(l);
+        }
+      }catch(_){}
+    })();
+  </script>
   <style>
     :root { --bg:#0b1320; --ink:#e8f1ff; --accent:#46e38a; }
     *{box-sizing:border-box}
