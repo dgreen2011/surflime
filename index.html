@@ -118,13 +118,14 @@
 
     // ----- Audio -----
     let music=null, waves=null,
-        // default to muted on mobile
-        muted = IS_MOBILE ? true : false,
+        // PERSISTED MUTE (default true on mobile if not saved)
+        muted = (localStorage.getItem('muted') ?? (IS_MOBILE ? 'true' : 'false')) === 'true',
         audioUnlocked=false;
 
     function initMusic(){
       if(!music){
-        const src = TRACKS[(Math.random()*TRACKS.length)|0];
+        const sel = localStorage.getItem('musicSelectedUrl');
+        const src = (sel && TRACKS.includes(sel)) ? sel : TRACKS[(Math.random()*TRACKS.length)|0];
         music = new Audio(src);
         music.loop = true; music.preload = 'auto'; music.playsInline = true;
       }
@@ -172,6 +173,7 @@
       if(!muted && music && music.paused){ music.play().catch(()=>{}); }
       if(!muted && waves && waves.paused){ try { waves.play(); } catch(_) {} }
       updateMuteUI();
+      try{ localStorage.setItem('muted', String(muted)); }catch{}
     }
     if(muteBtn){
       muteBtn.addEventListener('click',(e)=>{ e.preventDefault(); toggleMute(); });
@@ -198,6 +200,8 @@
     }
     addEventListener('resize', resizeDPR);
     addEventListener('focus', ()=>{ applyPlayerSelections(); applyUserScaleToPlayers(); updatePauseUI(); });
+    // AUTO-PAUSE ON BLUR
+    addEventListener('blur', ()=>{ if(state===STATE.RUN){ pause(); updatePauseUI(); } });
     resizeDPR();
 
     function topLimitPx(){   const p=(CFG.limits?.topPercent??0.20);   return vh * Math.min(0.98, Math.max(0, p)); }
@@ -256,7 +260,7 @@
     const targetMascotH=112;
     const INPUT = [ { up:false, down:false, boost:false }, { up:false, down:false, boost:false } ];
 
-    // Desktop keyboard controls (unchanged)
+    // Desktop keyboard controls (+ Escape pause/resume)
     addEventListener('keydown', e=>{
       if(e.code==='ArrowUp')INPUT[0].up=true;
       if(e.code==='ArrowDown')INPUT[0].down=true;
@@ -265,6 +269,11 @@
       if(e.code==='KeyS')INPUT[1].down=true;
       if(e.code==='KeyD')INPUT[1].boost=true;
       if(e.code==='KeyM')toggleMute();
+      if(e.code==='Escape'){
+        if(state===STATE.RUN){ pause(); }
+        else if(state===STATE.PAUSE){ resume(); }
+        updatePauseUI();
+      }
       if(e.code==='Enter' || e.code==='NumpadEnter'){
         if(state===STATE.RUN){ togglePause(); }
         else if(state===STATE.PAUSE){ resume(); }
@@ -427,7 +436,7 @@
       }
     }
 
-    // Obstacles
+    // Obstacles (unchanged)
     const activeObstacleSprites = new Set();
     const imagesLTR = [], imagesRTL = []; let bagLTR=[], bagRTL=[];
     function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
@@ -564,14 +573,13 @@
       }
     }
 
-    // Game state & loop
+    // Game state & loop (unchanged except pause helpers)
     const STATE={MENU:0,RUN:1,PAUSE:2,OVER:3};
     let state=STATE.MENU;
     let last=0, dt=0;
     const LEVEL_SECONDS=(Number.isFinite(CFG.level?.seconds)?CFG.level.seconds:20);
     let level=1, levelElapsed=0, BANNER_DURATION=1.8, levelBannerT=0, levelBannerText='';
 
-    // Motivational messages for levels 2–30
     const LEVEL_MSGS = {
       2:'Nice start!', 3:'Keep it up!', 4:'Smooth moves!', 5:'Great rhythm!', 6:'Wow!',
       7:'You got this!', 8:"You're rolling!", 9:'Strong momentum!', 10:'Cruising!', 11:'Dialed in!',
@@ -603,11 +611,25 @@
     applyPlayerSelections();
     applyUserScaleToPlayers();
 
+    // STORAGE SYNC: mascot/scale (existing) + music live-switch (NEW)
     window.addEventListener('storage', ()=>{
+      // Mascots + scale
       players[0]?.setMascot(selectedFor(0));
       if(players[1]) players[1].setMascot(selectedFor(1));
       const v=parseFloat(localStorage.getItem('mascotScale'));
       if(Number.isFinite(v)){ CFG.mascot = CFG.mascot||{}; CFG.mascot.scale=v; applyUserScaleToPlayers(); }
+
+      // Music sync (use selected track if present)
+      const url = localStorage.getItem('musicSelectedUrl');
+      if(url && TRACKS.includes(url)){
+        initMusic();
+        if(music.src !== url){
+          const wasPlaying = music && !music.paused && !muted;
+          try{ music.pause(); }catch{}
+          music.src = url;
+          if(wasPlaying){ music.muted = muted; music.volume = muted ? 0 : 0.35; music.play().catch(()=>{}); }
+        }
+      }
     });
 
     const obstacles=[]; let spawnTimer=0;
@@ -779,7 +801,7 @@
       drawables.sort((a,b)=>(a.y||0)-(b.y||0));
       for(const d of drawables){ d.draw?.(ctx); }
 
-      // HUD (unchanged top-left text)
+      // HUD
       ctx.save();
       ctx.font='16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
       ctx.fillStyle='#fff';
