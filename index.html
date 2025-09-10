@@ -45,18 +45,14 @@
     .icon-btn svg{ width:20px; height:20px }
     /* Hide Settings text on mobile */
     @media (pointer: coarse){ .settings-label{ display:none } }
-
-    /* Show Pause/Start button ONLY on mobile */
-    .mobile-only{ display:none }
-    @media (pointer: coarse){ .mobile-only{ display:inline-flex } }
   </style>
 </head>
 <body>
   <canvas id="game" width="1024" height="576"></canvas>
 
   <div class="icon-row">
-    <!-- Start/Pause button (mobile only) -->
-    <button id="btnPause" class="icon-btn mobile-only" title="Start" aria-label="Start">
+    <!-- Pause button -->
+    <button id="btnPause" class="icon-btn" title="Start" aria-label="Start">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="pauseIcon">
         <rect x="6" y="4" width="4" height="16"></rect>
@@ -67,9 +63,11 @@
 
     <!-- Mute -->
     <button id="btnMute" class="icon-btn" title="Mute" aria-label="Mute">
-      <svg id="muteIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <!-- icon set dynamically -->
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <line x1="23" y1="9" x2="17" y2="15"></line>
+        <line x1="17" y1="9" x2="23" y2="15"></line>
       </svg>
       <span>Mute</span>
     </button>
@@ -117,30 +115,12 @@
       });
     }
 
-    // ----- Mute button (with distinct icons) -----
+    // ----- Mute button -----
     const muteBtn = document.getElementById('btnMute');
-    const muteIcon = document.getElementById('muteIcon');
-    function setMuteIcon(isMuted){
-      if(!muteIcon) return;
-      if(isMuted){
-        // Speaker + X (muted)
-        muteIcon.innerHTML =
-          '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>' +
-          '<line x1="23" y1="9" x2="17" y2="15"></line>' +
-          '<line x1="17" y1="9" x2="23" y2="15"></line>';
-      }else{
-        // Speaker + sound waves (unmuted)
-        muteIcon.innerHTML =
-          '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>' +
-          '<path d="M15 9a3 3 0 0 1 0 6"></path>' +
-          '<path d="M17 5a7 7 0 0 1 0 14"></path>';
-      }
-    }
     function updateMuteUI(){
       if(!muteBtn) return;
       muteBtn.querySelector('span').textContent = muted ? 'Unmute' : 'Mute';
       muteBtn.title = muted ? 'Unmute' : 'Mute';
-      setMuteIcon(muted);
     }
 
     // ----- Config helpers -----
@@ -402,7 +382,7 @@
         this.boost = 0;
       }
       revive(){ this.reset(); }
-      // Avoid recreating sprites if the mascot name hasn't changed (prevents flicker)
+      // *** FIX: Avoid recreating sprites if the mascot name hasn't changed
       setMascot(name){
         if(this.name === name && this.sprites && this.sprites.name === name) return;
         this.name = name;
@@ -623,10 +603,20 @@
     const STATE={MENU:0,RUN:1,PAUSE:2,OVER:3};
     let state=STATE.MENU;
     let last=0, dt=0;
-
-    // Use existing config for difficulty step; no visible “Level”
     const LEVEL_SECONDS=(Number.isFinite(CFG.level?.seconds)?CFG.level.seconds:20);
-    let level=1, levelElapsed=0; // keep as an internal difficulty counter
+    let level=1, levelElapsed=0, BANNER_DURATION=1.8, levelBannerT=0, levelBannerText='';
+
+    // Motivational messages for levels 2–30
+    const LEVEL_MSGS = {
+      2:'Nice start!', 3:'Keep it up!', 4:'Smooth moves!', 5:'Great rhythm!', 6:'Wow!',
+      7:'You got this!', 8:"You're rolling!", 9:'Strong momentum!', 10:'Cruising!', 11:'Dialed in!',
+      12:'On fire!', 13:'Next level!', 14:'Unstoppable!', 15:'Crushing it!', 16:'Mega flow!',
+      17:'Serious skill!', 18:'Wave master!', 19:'Elite focus!', 20:'Charging hard!',
+      21:'Epic form!', 22:'No limits!', 23:'Untouchable!', 24:'Beast mode!',
+      25:'Absolute machine!', 26:'Unreal!', 27:'Unbelievable!', 28:'Legendary!',
+      29:'Off the charts!', 30:'Champion status!'
+    };
+    let levelBannerSub = '';
 
     function levelSpeedMultiplier(){ return Math.min(4, 1 + 0.04*(level-1)); }
     function levelSpawnInterval(){ const base=1.8, min=0.45; const t = 1 - Math.exp(-(level-1)/10); return base - (base - min) * t; }
@@ -641,6 +631,7 @@
       }else{
         if(want2 && players.length===1){ players.push(new Player(1, selectedFor(1))); }
         else if(!want2 && players.length===2){ players.pop(); }
+        // *** FIX: only update mascot if it actually changed
         const n0 = selectedFor(0);
         if(players[0].name !== n0) players[0].setMascot(n0);
         if(players[1]){
@@ -653,6 +644,7 @@
     applyUserScaleToPlayers();
 
     window.addEventListener('storage', ()=>{
+      // Only set if different; setMascot now also guards
       players[0]?.setMascot(selectedFor(0));
       if(players[1]) players[1].setMascot(selectedFor(1));
       const v=parseFloat(localStorage.getItem('mascotScale'));
@@ -673,7 +665,7 @@
 
     const obstacles=[]; let spawnTimer=0;
     function resetForNewGame(){
-      obstacles.length=0; spawnTimer=0; levelElapsed=0; level=1;
+      obstacles.length=0; spawnTimer=0; levelElapsed=0;
       activeObstacleSprites.clear(); applyPlayerSelections();
       players.forEach(p=>p.revive());
       applyUserScaleToPlayers();
@@ -687,7 +679,7 @@
       }
     }
 
-    function start(){ startMusic(); startWaves(); resetForNewGame(); state=STATE.RUN; updatePauseUI(); }
+    function start(){ startMusic(); startWaves(); level=1; resetForNewGame(); state=STATE.RUN; updatePauseUI(); }
     function pause(){ if(state===STATE.RUN){ state=STATE.PAUSE; updatePauseUI(); } }
     function resume(){ if(state===STATE.PAUSE){ state=STATE.RUN; updatePauseUI(); } }
     function togglePause(){ (state===STATE.RUN)?pause():resume(); }
@@ -702,8 +694,14 @@
       for(const o of obstacles){ for(const p of players){ if(o.hit(p)){ p.alive=false; } } }
       if(players.every(p=>!p.alive)){ gameOver(); }
 
-      // Increase difficulty silently every X seconds from config
-      if(levelElapsed>=LEVEL_SECONDS){ level++; levelElapsed = 0; }
+      if(levelElapsed>=LEVEL_SECONDS){
+        level++; levelElapsed = 0; levelBannerT = BANNER_DURATION;
+        levelBannerText = 'LEVEL ' + level;
+        if(level >= 2 && level <= 30){ levelBannerSub = LEVEL_MSGS[level] || ''; }
+        else if(level > 30){ levelBannerSub = "You've arrived…"; }
+        else { levelBannerSub = ''; }
+      }
+      if(levelBannerT>0){ levelBannerT -= dt; }
     }
 
     const doho=new Image(); let dohoReady=false; doho.onload=()=>dohoReady=true; doho.src='./Background/Doho.png';
@@ -749,6 +747,51 @@
       ctx.restore();
     }
 
+    // Modern banner with gradient + subtext
+    function drawLevelBanner(){
+      const w=vw, h=vh;
+      const elapsed = BANNER_DURATION - levelBannerT;
+      const alpha = elapsed < 0.25 ? (elapsed/0.25) : (elapsed > BANNER_DURATION-0.35 ? (BANNER_DURATION - elapsed)/0.35 : 1);
+      const bw = Math.min(680, Math.floor(w*0.72));
+      const bh = 140; // taller to fit subtext
+      const bannerY = (CFG.ui?.levelBannerYPercent ?? 0.18);
+      const x = (w-bw)/2, y = h * bannerY;
+
+      ctx.save();
+      ctx.globalAlpha = 0.90 * Math.max(0,alpha);
+
+      const grad = ctx.createLinearGradient(0, y, 0, y+bh);
+      grad.addColorStop(0, '#0b1f39cc');
+      grad.addColorStop(1, '#061427cc');
+      ctx.fillStyle = grad;
+      ctx.strokeStyle = '#46e38a';
+      ctx.lineWidth = 3;
+
+      ctx.shadowColor = '#052b1a';
+      ctx.shadowBlur = 24;
+      roundRectPath(ctx, x, y, bw, bh, 18);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.stroke();
+
+      ctx.globalAlpha = Math.max(0,alpha);
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 18;
+      ctx.font = 'bold 56px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
+      ctx.fillText(levelBannerText, w/2, y + bh*0.45);
+
+      if(levelBannerSub){
+        ctx.shadowBlur = 12;
+        ctx.font = '600 20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
+        ctx.fillStyle = '#c8ffe2';
+        ctx.fillText(levelBannerSub, w/2, y + bh*0.75);
+      }
+      ctx.restore();
+    }
+
     function draw(){
       const w=vw,h=vh;
       ctx.clearRect(0,0,w,h);
@@ -789,18 +832,18 @@
       drawables.sort((a,b)=>(a.y||0)-(b.y||0));
       for(const d of drawables){ d.draw?.(ctx); }
 
-      // HUD: remove Level; keep optional countdown if you want
+      // HUD (unchanged top-left text)
       ctx.save();
       ctx.font='16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
       ctx.fillStyle='#fff';
-      // Countdown to next difficulty tick (kept)
+      ctx.fillText(`Level: ${level}`,16,24);
       const remain=Math.ceil(Math.max(0,LEVEL_SECONDS-levelElapsed));
-      ctx.fillText(`Time: ${String(Math.floor(remain/60)).padStart(2,'0')}:${String(remain%60).padStart(2,'0')}`,16,24);
-      if(!IS_MOBILE && (localStorage.getItem('twoPlayerEnabled') === 'true')){
-        ctx.fillStyle='#b9ffd7'; ctx.fillText(`P1: ${players[0]?.name||'-'}`,16,48);
-        ctx.fillStyle='#ffe399'; ctx.fillText(`P2: ${players[1]?.name||'-'}`,16,68);
+      ctx.fillText(`Time: ${String(Math.floor(remain/60)).padStart(2,'0')}:${String(remain%60).padStart(2,'0')}`,16,48);
+      if(!IS_MOBILE && twoPlayerEnabled()){
+        ctx.fillStyle='#b9ffd7'; ctx.fillText(`P1: ${players[0]?.name||'-'}`,16,72);
+        ctx.fillStyle='#ffe399'; ctx.fillText(`P2: ${players[1]?.name||'-'}`,16,92);
       }else{
-        ctx.fillStyle='#b9ffd7'; ctx.fillText(`Mascot: ${players[0]?.name||'-'}`,16,48);
+        ctx.fillStyle='#b9ffd7'; ctx.fillText(`Mascot: ${players[0]?.name||'-'}`,16,72);
       }
       ctx.restore();
 
@@ -808,7 +851,7 @@
       if(state===STATE.MENU){ drawCenter('Surf Lime', IS_MOBILE?'Tap & Hold to Rise':'Press Enter to Start'); }
       if(state===STATE.PAUSE){ drawCenter('Paused', IS_MOBILE?'Tap to Resume':'Press Enter to Resume'); }
       if(state===STATE.OVER){ drawCenter('Wipeout!', IS_MOBILE?'Tap to Play Again':'Press Enter to Play Again'); }
-      // No level banner anymore
+      if(levelBannerT>0){ drawLevelBanner(); }
     }
 
     function loop(t){
@@ -818,7 +861,6 @@
       draw();
       requestAnimationFrame(loop);
     }
-    updateMuteUI();
     updatePauseUI();
     requestAnimationFrame(loop);
   })();
