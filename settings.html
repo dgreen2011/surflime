@@ -179,6 +179,12 @@
       h1{ font-size:26px }
       .cta-play{ height:52px; padding:0 20px }
     }
+
+    /* Mobile-only tweaks per request */
+    @media (pointer:coarse){
+      .bar{ display:none !important; }       /* hide Two-player bar on mobile */
+      .cta-hint{ display:none !important; }  /* hide "Press Enter to start" on mobile */
+    }
   </style>
 </head>
 
@@ -206,10 +212,9 @@
       </div>
     </div>
 
-    <!-- Background Music -->
+    <!-- Background Music (label removed by request) -->
     <div class="info music-card" id="music">
       <h2>
-        <span>Background Music</span>
         <span class="songname" id="songName"></span>
         <span class="nowchip" id="nowChip" hidden>Now playing</span>
       </h2>
@@ -236,8 +241,7 @@
         <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek">
         <div class="muted" id="timeLabel">0:00 / 0:00</div>
       </div>
-
-      <div class="muted">Pick a track; your choice is saved and continues into (and out of) the game.</div>
+      <!-- Removed helper text: "Pick a track; your choice is saved..." -->
     </div>
 
     <!-- Mascots -->
@@ -275,16 +279,24 @@
     if(!localStorage.getItem('selectedMascot'))  localStorage.setItem('selectedMascot','Lime'); // legacy
     if(!localStorage.getItem('selectedMascotP2')) localStorage.setItem('selectedMascotP2','Banana');
 
-    // Two-player toggle (hidden on mobile)
+    // Two-player toggle (hide entire bar on mobile + keep p2 hidden)
     const twoP = document.getElementById('twoP');
     const twoToggle = document.getElementById('twoToggle');
     const p2Section = document.getElementById('p2');
 
     if(IS_MOBILE){
+      // Hide the entire bar and disable 2P
+      document.querySelector('.bar')?.remove();
       if(twoToggle) twoToggle.style.display='none';
       localStorage.setItem('twoPlayerEnabled','false');
       if(twoP){ twoP.checked = false; twoP.disabled = true; }
       p2Section.style.display = 'none';
+
+      // Mobile-specific copy changes
+      const p1Inst = document.querySelector('#p1 .inst');
+      if(p1Inst) p1Inst.textContent = 'Tap to move up, release to go down.';
+      // Remove "Press Enter to start" hint on mobile
+      document.querySelector('.cta-hint')?.remove();
     }else{
       if(twoP){
         twoP.checked = localStorage.getItem('twoPlayerEnabled') === 'true';
@@ -483,7 +495,7 @@
       });
     })();
 
-    // Press Enter to Play from Settings
+    // Press Enter to Play from Settings (kept; just hidden on mobile)
     document.addEventListener('keydown', (e) => {
       const tag = (e.target && e.target.tagName) || '';
       if(e.key === 'Enter' && tag !== 'INPUT' && tag !== 'TEXTAREA' && !e.metaKey && !e.ctrlKey){
