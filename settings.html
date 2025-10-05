@@ -2,9 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <!-- Keep the existing responsive behavior -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Surf Lime • Settings</title>
-  <link rel="prefetch" as="image" href="./Background/Doho.png">
+
+  <!-- Settings page background now uses Settings.png (not Doho.png) -->
+  <link rel="prefetch" as="image" href="./Background/Settings.png">
 
   <script>
     // Prefetch a couple mascot frames so the game starts instantly after Play
@@ -24,7 +27,7 @@
   </script>
 
   <style>
-    /* ===== Beach Theme Base ===== */
+    /* ===== Beach Theme Base (no emoji decorations) ===== */
     :root{
       --sky:#0a3051; --sea:#0fb3c4; --reef:#18d3b2; --sand:#f8dba5;
       --ink:#fff; --muted:#e8f6ffcc; --line:#1d5a70;
@@ -41,10 +44,12 @@
         radial-gradient(1100px 360px at 72% -6%, rgba(255,224,138,.45) 0%, rgba(255,224,138,0) 60%),
         linear-gradient(to bottom, var(--sky) 0%, #0d4a6d 28%, var(--sea) 60%, #12cfc9 75%);
       overflow-y:auto;
+      -webkit-tap-highlight-color: transparent;
     }
     body::after{
       content:""; position:fixed; inset:0;
-      background: url("./Background/Doho.png") bottom center / cover no-repeat;
+      /* Settings background now points at Settings.png */
+      background: url("./Background/Settings.png") bottom center / cover no-repeat;
       opacity:.22; pointer-events:none; z-index:0;
     }
     .wrap{ position:relative; z-index:1; max-width:1120px; margin:28px auto; padding:0 16px; }
@@ -63,9 +68,7 @@
       font-weight:900; letter-spacing:.3px; text-decoration:none; color:#0b1320;
       background: linear-gradient(180deg,#ffd37e,#ff9851);
       border:1px solid #ffc27e;
-      box-shadow:
-        0 12px 26px rgba(255,162,79,.35),
-        0 2px 0 #ffffffa0 inset;
+      box-shadow: 0 12px 26px rgba(255,162,79,.35), 0 2px 0 #ffffffa0 inset;
       transform: translateY(0);
       transition: transform .12s ease, filter .12s ease, box-shadow .12s ease;
     }
@@ -80,7 +83,7 @@
       user-select:none;
     }
 
-    /* Slim top utility bar for toggles (no Play inside a box anymore) */
+    /* Slim top utility bar */
     .bar{
       display:flex; justify-content:flex-end; align-items:center;
       margin:10px 0 18px; padding:10px 12px;
@@ -102,22 +105,40 @@
       backdrop-filter: blur(8px);
     }
     .info h2{ margin:0 0 10px; font-size:18px; display:flex; align-items:center; gap:10px; }
-    #music h2::before{ content:"🌺"; font-size:18px }
-    #howto h2::before{ content:"🌊"; font-size:18px }
     .muted{ color:var(--muted); font-size:12px }
 
+    /* ===== Modernized Music Card ===== */
+    .music-card h2{ margin-bottom:6px }
+    .transport{ display:flex; align-items:center; gap:10px; margin-top:10px; }
+    .tbtn{
+      width:42px; height:42px; display:inline-flex; align-items:center; justify-content:center; border-radius:10px;
+      border:1px solid #ffffff22;
+      background: linear-gradient(180deg, rgba(10,40,70,.6), rgba(6,24,46,.75));
+      color:#fff; cursor:pointer; box-shadow: 0 6px 16px rgba(0,0,0,.25);
+    }
+    .tbtn:hover{ filter:brightness(1.06) }
+    .tbtn:focus-visible{ outline:2px solid var(--focus); outline-offset:3px }
+    .songname{ font-weight:800; margin-left:8px; opacity:.95; letter-spacing:.2px }
+    .nowchip{
+      display:inline-block; padding:4px 10px; border-radius:999px; margin-left:auto;
+      font-weight:800; letter-spacing:.2px; color:#0a223b;
+      background: linear-gradient(180deg,#c6ffe4,#8bf0c2 70%); border:1px solid #00000012;
+      text-shadow:0 1px 0 #ffffffcc;
+    }
+    .seek{
+      display:flex; align-items:center; gap:10px; margin-top:10px;
+    }
+    .seek input[type="range"]{ width:100% }
+
+    /* ===== Mascots grid ===== */
     .psec{ margin-top:18px; }
     .phead{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
     .phead h3{ margin:0; font-size:18px; letter-spacing:.2px }
-    .phead h3::before{ content:"🌴"; margin-right:6px }
     .chip{
       display:inline-block; padding:5px 12px; border-radius:999px; font-weight:800; letter-spacing:.2px;
-      color:#08243d;
-      background: linear-gradient(180deg,#ffd4f0,#ffb789 70%);
-      border:1px solid #00000014; text-shadow:0 1px 0 #ffffffcc;
+      color:#08243d; background: linear-gradient(180deg,#ffd4f0,#ffb789 70%); border:1px solid #00000014; text-shadow:0 1px 0 #ffffffcc;
       box-shadow: 0 4px 14px rgba(255,158,121,.35);
     }
-
     .grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(130px,1fr)); gap:12px; margin-top:10px; }
     .tile{
       background: linear-gradient(180deg, rgba(10,40,70,.55), rgba(6,24,46,.68));
@@ -135,21 +156,14 @@
     }
     .tile:focus-visible{ outline:2px solid var(--focus); outline-offset:3px }
 
-    .transport{ display:flex; align-items:center; gap:10px; margin-top:10px; }
-    .tbtn{
-      width:42px; height:42px; display:inline-flex; align-items:center; justify-content:center; border-radius:10px;
-      border:1px solid #ffffff22;
-      background: linear-gradient(180deg, rgba(10,40,70,.6), rgba(6,24,46,.75));
-      color:#fff; cursor:pointer; box-shadow: 0 6px 16px rgba(0,0,0,.25);
-    }
-    .tbtn:hover{ filter:brightness(1.06) }
-    .tbtn:focus-visible{ outline:2px solid var(--focus); outline-offset:3px }
-    .songname{ font-weight:700; margin-left:6px; opacity:.9 }
-
     #howto kbd{
       display:inline-block; padding:0 6px; border-radius:6px; border:1px solid #ffffff33;
-      background:rgba(255,255,255,.08); box-shadow: inset 0 0 0 1px #ffffff14;
-      font-size:12px
+      background:rgba(255,255,255,.08); box-shadow: inset 0 0 0 1px #ffffff14; font-size:12px
+    }
+
+    /* Desktop: force all mascots into a single row (no wrap) */
+    @media (min-width: 860px){
+      #grid1, #grid2{ grid-auto-flow: column; }
     }
 
     @media (max-width:640px){
@@ -172,7 +186,7 @@
       <div class="cta-hint">Press <strong>Enter</strong> to start</div>
     </div>
 
-    <!-- Slim utility bar (no Play here) -->
+    <!-- Slim utility bar -->
     <div class="bar">
       <div class="toggle" id="twoToggle">
         <label for="twoP"><strong>Two-Player Mode</strong></label>
@@ -180,9 +194,14 @@
       </div>
     </div>
 
-    <!-- Background Music -->
-    <div class="info" id="music">
-      <h2><span>Background Music</span><span class="songname" id="songName"></span></h2>
+    <!-- Background Music (modernized) -->
+    <div class="info music-card" id="music">
+      <h2>
+        <span>Background Music</span>
+        <span class="songname" id="songName"></span>
+        <span class="nowchip" id="nowChip" hidden>Now playing</span>
+      </h2>
+
       <div class="transport" id="transport">
         <button class="tbtn" id="prevBtn" title="Previous" aria-label="Previous">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -200,7 +219,13 @@
           </svg>
         </button>
       </div>
-      <div class="muted">Pick a track; your choice is saved for the game.</div>
+
+      <div class="seek">
+        <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek">
+        <div class="muted" id="timeLabel">0:00 / 0:00</div>
+      </div>
+
+      <div class="muted">Pick a track; your choice is saved and continues into (and out of) the game.</div>
     </div>
 
     <div class="info" id="howto">
@@ -224,7 +249,10 @@
   <script>
     const IS_MOBILE = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
 
-    const ALL_MASCOTS = ["Lime","Banana","Strawberry","Grapes","Orange","Pineapple","Watermelon"];
+    /* === Mascots: alphabetical, Lime first; include Cherry === */
+    const OTHER_MASCOTS = ["Banana","Cherry","Grapes","Orange","Pineapple","Strawberry","Watermelon"].sort();
+    const ALL_MASCOTS  = ["Lime", ...OTHER_MASCOTS];
+
     try{ localStorage.setItem('availableMascots', JSON.stringify(ALL_MASCOTS)); }catch(e){}
 
     if(!localStorage.getItem('selectedMascotP1')) localStorage.setItem('selectedMascotP1','Lime');
@@ -316,60 +344,156 @@
     }
 
     const g1 = document.getElementById('grid1'), g2 = document.getElementById('grid2');
-    ["Lime","Banana","Strawberry","Grapes","Orange","Pineapple","Watermelon"].forEach(n => { g1.appendChild(makeTile(n,0)); g2.appendChild(makeTile(n,1)); });
+    ALL_MASCOTS.forEach(n => { g1.appendChild(makeTile(n,0)); g2.appendChild(makeTile(n,1)); });
     updateSelections();
 
-    // Music transport in Settings (Supabase)
-    ;(function(){
+    // Desktop: one visible row for mascots (no wrapping)
+    (function layoutRow(){
+      if(!IS_MOBILE){
+        const cols = ALL_MASCOTS.length;
+        [g1,g2].forEach(g=> g.style.gridTemplateColumns = `repeat(${cols}, minmax(120px,1fr))`);
+      }
+    })();
+
+    /* === Music transport in Settings (Supabase) with cross-page persistence === */
+    (function(){
       const CFG = window.SURFLIME_CONFIG || {};
       const s = CFG.music && CFG.music.supabase;
       const nameEl = document.getElementById('songName');
+      const nowChip = document.getElementById('nowChip');
       const prevBtn = document.getElementById('prevBtn');
       const nextBtn = document.getElementById('nextBtn');
       const playBtn = document.getElementById('playBtn');
       const playIcon= document.getElementById('playIcon');
+      const seek    = document.getElementById('seek');
+      const timeLbl = document.getElementById('timeLabel');
+
+      const K = { url:'musicSelectedUrl', pos:'musicPosition', state:'musicPlayState', changed:'_musicChangedAt' };
 
       const tracks = (s && s.enabled && s.projectRef && s.bucket && Array.isArray(s.files))
         ? s.files.map(n => ({ name: n, url: `https://${s.projectRef}.supabase.co/storage/v1/object/public/${encodeURIComponent(s.bucket)}/${encodeURIComponent(n)}` }))
         : [];
 
+      const pretty = (file) => (file || '').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').trim();
+      const fmtT = (sec)=> {
+        sec = Math.max(0, Math.floor(sec||0));
+        const m = Math.floor(sec/60), s2 = sec%60;
+        return m + ':' + String(s2).padStart(2,'0');
+      };
+
       let i = 0;
       if(tracks.length){
-        const saved = localStorage.getItem('musicSelectedUrl');
-        const found = tracks.findIndex(t => t.url === saved);
+        const savedUrl = localStorage.getItem(K.url);
+        const found = tracks.findIndex(t => t.url === savedUrl);
         if(found >= 0) i = found;
       }
 
-      let audio = null, playing = false;
+      let audio = null, playing = false, seekLock=false, saveTimer=0;
 
       function ensureAudio(){
-        if(!audio){ audio = new Audio(); audio.loop=false; audio.preload='auto'; audio.volume=0.6; audio.playsInline=true; }
+        if(!audio){
+          audio = new Audio();
+          audio.loop = true;      // loop music like in-game
+          audio.preload = 'auto';
+          audio.volume  = 0.6;
+          audio.playsInline = true;
+          audio.addEventListener('timeupdate', ()=>{
+            if(saveTimer++ % 6 === 0){ // ~ couple times a second at most
+              try{ localStorage.setItem(K.pos, String(audio.currentTime)); localStorage.setItem(K.changed, String(Date.now())); }catch{}
+            }
+            if(!seekLock && audio.duration){
+              seek.value = Math.round(1000 * (audio.currentTime / audio.duration));
+              timeLbl.textContent = fmtT(audio.currentTime) + ' / ' + fmtT(audio.duration);
+            }
+          });
+          audio.addEventListener('play',  ()=>{ playing=true;  setPlayIcon(); nowChip.hidden=false; try{ localStorage.setItem(K.state,'playing'); localStorage.setItem(K.changed, String(Date.now())); }catch{} });
+          audio.addEventListener('pause', ()=>{ playing=false; setPlayIcon(); nowChip.hidden=true;  try{ localStorage.setItem(K.state,'paused');  localStorage.setItem(K.changed, String(Date.now())); }catch{} });
+          window.addEventListener('beforeunload', ()=>{
+            try{
+              localStorage.setItem(K.pos, String(audio.currentTime||0));
+              localStorage.setItem(K.state, playing ? 'playing' : 'paused');
+              localStorage.setItem(K.changed, String(Date.now()));
+            }catch{}
+          });
+        }
         return audio;
-      }
-      function show(){
-        if(!tracks.length){ nameEl.textContent = '(no Supabase songs)'; prevBtn.disabled=nextBtn.disabled=playBtn.disabled=true; return; }
-        nameEl.textContent = tracks[i].name;
-        localStorage.setItem('musicSelectedUrl', tracks[i].url);
-        try{ localStorage.setItem('_musicChangedAt', String(Date.now())); }catch{}
       }
       function setPlayIcon(){
         playIcon.innerHTML = playing
           ? '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>'
           : '<polygon points="8 5 19 12 8 19 8 5"></polygon>';
       }
+      function show(){
+        if(!tracks.length){
+          nameEl.textContent = '(no Supabase songs)';
+          prevBtn.disabled=nextBtn.disabled=playBtn.disabled=true;
+          return;
+        }
+        nameEl.textContent = pretty(tracks[i].name);
+        try{
+          localStorage.setItem(K.url, tracks[i].url);
+          localStorage.setItem(K.changed, String(Date.now()));
+        }catch{}
+      }
+      function loadAndMaybeResume(targetUrl){
+        const a = ensureAudio();
+        const wantUrl = targetUrl || tracks[i].url;
+        const savedPos = parseFloat(localStorage.getItem(K.pos) || '0') || 0;
+        const wantPlay = (localStorage.getItem(K.state) || '') === 'playing';
+        a.src = wantUrl;
+        a.onloadedmetadata = ()=>{
+          if(Number.isFinite(savedPos) && a.duration && savedPos < a.duration){ a.currentTime = Math.max(0, savedPos); }
+          timeLbl.textContent = fmtT(a.currentTime) + ' / ' + fmtT(a.duration);
+          if(wantPlay){ a.play().catch(()=>{}); }
+        };
+      }
+
+      // Seek
+      seek.addEventListener('input', ()=>{
+        const a = ensureAudio();
+        if(!a.duration) return;
+        seekLock = true;
+        const t = (+seek.value/1000) * a.duration;
+        a.currentTime = t;
+        timeLbl.textContent = fmtT(a.currentTime) + ' / ' + fmtT(a.duration);
+        try{ localStorage.setItem(K.pos, String(a.currentTime)); localStorage.setItem(K.changed, String(Date.now())); }catch{}
+        seekLock = false;
+      });
+
       function play(){
         if(!tracks.length) return;
         const a = ensureAudio();
         a.src = tracks[i].url;
-        a.play().then(()=>{ playing=true; setPlayIcon(); }).catch(()=>{});
+        a.play().then(()=>{ playing=true; setPlayIcon(); nowChip.hidden=false; }).catch(()=>{});
       }
-      function pause(){ if(audio){ audio.pause(); playing=false; setPlayIcon(); } }
+      function pause(){ if(audio){ audio.pause(); } }
 
-      prevBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; i=(i-1+tracks.length)%tracks.length; show(); if(playing) play(); });
-      nextBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; i=(i+1)%tracks.length; show(); if(playing) play(); });
+      prevBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; i=(i-1+tracks.length)%tracks.length; show(); play(); });
+      nextBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; i=(i+1)%tracks.length; show(); play(); });
       playBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; if(!playing) play(); else pause(); });
 
+      // Initial paint + resume if we were already playing in-game
       show();
+      const savedUrl = localStorage.getItem(K.url);
+      if(savedUrl){ const idx = tracks.findIndex(t=>t.url===savedUrl); if(idx>=0){ i = idx; show(); } }
+      loadAndMaybeResume(savedUrl);
+
+      // If the game changes track/state, mirror it here.
+      window.addEventListener('storage', (e)=>{
+        if(e.key === K.url){
+          const url = localStorage.getItem(K.url);
+          if(url){ const idx = tracks.findIndex(t=>t.url===url); if(idx>=0){ i=idx; show(); loadAndMaybeResume(url); } }
+        }
+        if(e.key === K.state){
+          const st = localStorage.getItem(K.state);
+          if(st === 'playing'){ ensureAudio().play().catch(()=>{}); }
+          if(st === 'paused'){ pause(); }
+        }
+        if(e.key === K.pos && audio && !audio.paused){
+          const v = parseFloat(localStorage.getItem(K.pos)||'0');
+          if(Number.isFinite(v) && audio.duration){ audio.currentTime = Math.min(audio.duration-0.2, Math.max(0,v)); }
+        }
+      });
     })();
 
     // Press Enter to Play from Settings
