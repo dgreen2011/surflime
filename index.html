@@ -63,20 +63,29 @@
 
     <!-- Mute -->
     <button id="btnMute" class="icon-btn" title="Mute" aria-label="Mute">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      <svg id="muteIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <!-- Default to "volume up"; JS swaps based on state -->
         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-        <line x1="23" y1="9" x2="17" y2="15"></line>
-        <line x1="17" y1="9" x2="23" y2="15"></line>
+        <path d="M15 9a3 3 0 0 1 0 6"></path>
+        <path d="M19 7a7 7 0 0 1 0 10"></path>
       </svg>
       <span>Mute</span>
     </button>
 
-    <!-- Settings -->
+    <!-- Settings (icon updated to sliders) -->
     <a class="icon-btn" href="settings.html" title="Settings" aria-label="Settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0A1.65 1.65 0 0 0 9 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82h0A1.65 1.65 0 0 0 20.91 11H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="4" y1="21" x2="4" y2="14"></line>
+        <line x1="4" y1="10" x2="4" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="12"></line>
+        <line x1="12" y1="8" x2="12" y2="3"></line>
+        <line x1="20" y1="21" x2="20" y2="16"></line>
+        <line x1="20" y1="12" x2="20" y2="3"></line>
+        <line x1="1" y1="14" x2="7" y2="14"></line>
+        <line x1="9" y1="8" x2="15" y2="8"></line>
+        <line x1="17" y1="16" x2="23" y2="16"></line>
       </svg>
       <span class="settings-label">Settings</span>
     </a>
@@ -119,8 +128,18 @@
     const muteBtn = document.getElementById('btnMute');
     function updateMuteUI(){
       if(!muteBtn) return;
-      muteBtn.querySelector('span').textContent = muted ? 'Unmute' : 'Mute';
-      muteBtn.title = muted ? 'Unmute' : 'Mute';
+      const label = muted ? 'Unmute' : 'Mute';
+      muteBtn.querySelector('span').textContent = label;
+      muteBtn.title = label;
+      muteBtn.setAttribute('aria-label', label);
+      const icon = muteBtn.querySelector('#muteIcon');
+      if(icon){
+        icon.innerHTML = muted
+          // speaker with X (muted)
+          ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line>'
+          // speaker with waves (unmuted)
+          : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15 9a3 3 0 0 1 0 6"></path><path d="M19 7a7 7 0 0 1 0 10"></path>';
+      }
     }
 
     // ----- Config helpers -----
@@ -700,6 +719,12 @@
         if(level >= 2 && level <= 30){ levelBannerSub = LEVEL_MSGS[level] || ''; }
         else if(level > 30){ levelBannerSub = "You've arrived…"; }
         else { levelBannerSub = ''; }
+
+        // --- 2P RESPAWN: bring back any dead player at level-up ---
+        if(players.length > 1){
+          for(const p of players){ if(!p.alive) p.revive(); }
+          applyUserScaleToPlayers();
+        }
       }
       if(levelBannerT>0){ levelBannerT -= dt; }
     }
