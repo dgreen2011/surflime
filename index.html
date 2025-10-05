@@ -353,6 +353,8 @@
     // ===== Canvas + game state =====
     const canvas=document.getElementById('game'); const ctx=canvas.getContext('2d',{alpha:false});
     let vw = canvas.width, vh = canvas.height, dpr=1;
+    // Snap a CSS pixel coordinate to the nearest device-pixel boundary to prevent shimmer
+    function px(v){ return Math.round(v * dpr) / dpr; }
     const world = { time: 0, seaLevel: 0 };
     function resizeDPR(){
       const rect = canvas.getBoundingClientRect();
@@ -589,7 +591,7 @@
         this.roll += (((this.vy)*0.003 + (this.boost>0?0.12:0)) - this.roll)*dt*6;
       }
       draw(ctx){
-        ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this.roll);
+        ctx.save(); ctx.translate(px(this.x), px(this.y)); ctx.rotate(this.roll);
         const showingFall = (!this.alive) || (state===STATE.OVER);
         const img   = showingFall ? this.sprites.fall     : this.sprites.surf;
         const ready = showingFall ? this.sprites.fallReady: this.sprites.surfReady;
@@ -722,7 +724,7 @@
       }
       draw(ctx){
         if(!this.img) return;
-        ctx.save(); ctx.translate(this.x,this.y);
+        ctx.save(); ctx.translate(px(this.x), px(this.y));
         const depth = depthMul('obstacle', this.y) * obstacleScaleMul();
         const h = this.img.height * depth;
         const w = this.img.width  * depth;
