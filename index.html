@@ -6,22 +6,31 @@
   <title>Surf Lime</title>
   <link rel="preload" as="image" href="./Background/Doho.png" fetchpriority="high">
   <script>
-    // Preload Player 1's selected mascot images so it appears immediately
+    // Preload selected mascots so they render on first frame
     (function(){
       try{
-        let n = localStorage.getItem('selectedMascotP1') || localStorage.getItem('selectedMascot') || 'Lime';
-        if(n === 'Pinapple') n = 'Pineapple'; // historical typo guard
-        const base = `./Mascots/${n}/${n}`;
-        const urls = [
-          { href: `${base}Surfer.png`, priority: 'high' },
-          { href: `${base}Surf.png`,   priority: 'high' },
-          { href: `${base}Fall.png`,   priority: 'low'  }
-        ];
-        for(const {href, priority} of urls){
-          const l = document.createElement('link');
-          l.rel = 'preload'; l.as = 'image'; l.href = href; l.setAttribute('fetchpriority', priority);
-          document.head.appendChild(l);
-        }
+        const preloadMascot = (name) => {
+          if(!name) return;
+          if(name === 'Pinapple') name = 'Pineapple'; // typo guard
+          const base = `./Mascots/${name}/${name}`;
+          const urls = [
+            { href: `${base}Surfer.png`, priority: 'high' },
+            { href: `${base}Surf.png`,   priority: 'high' },
+            { href: `${base}Fall.png`,   priority: 'low'  }
+          ];
+          for(const {href, priority} of urls){
+            const l = document.createElement('link');
+            l.rel = 'preload'; l.as = 'image'; l.href = href; l.setAttribute('fetchpriority', priority);
+            document.head.appendChild(l);
+          }
+        };
+
+        let p1 = localStorage.getItem('selectedMascotP1') || localStorage.getItem('selectedMascot') || 'Lime';
+        let p2 = localStorage.getItem('selectedMascotP2') || 'Banana';
+        if(p1 === 'Pinapple') p1 = 'Pineapple';
+        if(p2 === 'Pinapple') p2 = 'Pineapple';
+        preloadMascot(p1);
+        if(localStorage.getItem('twoPlayerEnabled') === 'true'){ preloadMascot(p2); }
       }catch(_){}
     })();
   </script>
@@ -29,6 +38,13 @@
     :root { --bg:#0b1320; --ink:#e8f1ff; --accent:#46e38a; }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0;background:#0b1320;color:var(--ink);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+
+    /* Reveal gate: hide canvas + HUD until assets are ready */
+    body[data-ready="0"] canvas{ opacity:0 }
+    body[data-ready="1"] canvas{ opacity:1; transition:opacity .22s ease }
+    body[data-ready="0"] .icon-row{ opacity:0; pointer-events:none }
+    body[data-ready="1"] .icon-row{ opacity:1; transition:opacity .22s ease }
+
     canvas{
       position:fixed; inset:0; width:100vw; height:100vh; display:block; background:#0a2846;
       touch-action:none; -ms-touch-action:none; user-select:none; -webkit-user-select:none;
@@ -47,7 +63,7 @@
     @media (pointer: coarse){ .settings-label{ display:none } }
   </style>
 </head>
-<body>
+<body data-ready="0">
   <canvas id="game" width="1024" height="576"></canvas>
 
   <div class="icon-row">
@@ -73,7 +89,7 @@
       <span>Mute</span>
     </button>
 
-    <!-- Settings (icon updated to sliders) -->
+    <!-- Settings (clean sliders icon) -->
     <a class="icon-btn" href="settings.html" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -95,6 +111,21 @@
   <script>
   (()=>{
     const IS_MOBILE = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
+
+    // ====== Small asset-wait helpers (so everything appears together) ======
+    function waitImage(img, timeout=8000){
+      return new Promise(resolve=>{
+        if(img && img.complete && img.naturalWidth>0) return resolve(true);
+        const done = ()=>{ clearTimeout(t); resolve(true); };
+        const fail = ()=>{ clearTimeout(t); resolve(false); }; // don't block forever
+        img.addEventListener('load', done, { once:true });
+        img.addEventListener('error', fail, { once:true });
+        const t = setTimeout(fail, timeout);
+      });
+    }
+    function waitSpritePair(sp){
+      return Promise.all([ waitImage(sp.surf), waitImage(sp.fall) ]);
+    }
 
     // ----- Pause button -----
     const pauseBtn = document.getElementById('btnPause');
@@ -240,7 +271,6 @@
     }
     addEventListener('resize', resizeDPR);
     addEventListener('focus', ()=>{ applyPlayerSelections(); applyUserScaleToPlayers(); updatePauseUI(); });
-    // AUTO-PAUSE ON BLUR
     addEventListener('blur', ()=>{ if(state===STATE.RUN){ pause(); updatePauseUI(); } });
     resizeDPR();
 
@@ -300,7 +330,6 @@
     const targetMascotH=112;
     const INPUT = [ { up:false, down:false, boost:false }, { up:false, down:false, boost:false } ];
 
-    // Desktop keyboard controls (+ Escape pause/resume)
     addEventListener('keydown', e=>{
       if(e.code==='ArrowUp')INPUT[0].up=true;
       if(e.code==='ArrowDown')INPUT[0].down=true;
@@ -330,7 +359,6 @@
       if(e.code==='KeyD')INPUT[1].boost=false;
     });
 
-    // --- MOBILE: press & hold ONLY to rise; release returns to base position ---
     let mobileHold=false;
     function onPointerDown(e){
       if(e.pointerType!=='touch' && !IS_MOBILE) return;
@@ -351,7 +379,6 @@
     canvasEl.addEventListener('gestureend', e=>e.preventDefault());
     canvasEvents.forEach(type=> canvasEl.addEventListener(type, (type==='pointerdown'?onPointerDown:onPointerUp), {passive:false}));
 
-    // Mascot sprites/classes
     function installMascotFallback(img, name, kind, primary){
       const cands=[];
       const names=[name, (name==='Pineapple'?'Pinapple':null)].filter(Boolean);
@@ -387,7 +414,6 @@
       reset(){
         this.baseX = vw * (this.index===0 ? 0.22 : 0.18);
         this.x = this.baseX;
-        // Start close to the bottom on mobile; desktop keeps prior behavior
         if(IS_MOBILE){
           const CFG = window.SURFLIME_CONFIG||{};
           const offset = Number.isFinite(CFG?.mobile?.holdRise?.baseOffsetFromBottomPx) ? CFG.mobile.holdRise.baseOffsetFromBottomPx : 18;
@@ -397,11 +423,9 @@
           this.y = world.seaLevel - (this.index===0?30:60);
         }
         this.baseY = this.y; this.vy=0; this.r=16; this.roll=0; this.pumpPhase=0; this.alive=true;
-        // Ensure no leftover forward bias after crash/restart
         this.boost = 0;
       }
       revive(){ this.reset(); }
-      // *** FIX: Avoid recreating sprites if the mascot name hasn't changed
       setMascot(name){
         if(this.name === name && this.sprites && this.sprites.name === name) return;
         this.name = name;
@@ -415,19 +439,15 @@
         const pressed=INPUT[this.index].boost;
         this.boost=clamp(this.boost + (pressed?accel:-decay)*dt,0,1);
 
-        // Vertical movement model
         if(IS_MOBILE){
-          // Configurable, slightly slower mobile motion
           const upAccel  = Number.isFinite(CFG.mobile?.motion?.riseAccel)    ? CFG.mobile.motion.riseAccel    : 800;
           const springK  = Number.isFinite(CFG.mobile?.motion?.fallSpringK)  ? CFG.mobile.motion.fallSpringK  : 6.0;
           const dampCoef = Number.isFinite(CFG.mobile?.motion?.fallDamping)  ? CFG.mobile.motion.fallDamping  : 3.5;
-
-          if(mobileHold){
-            this.vy -= upAccel * dt;
-          }else{
+          if(mobileHold){ this.vy -= upAccel * dt; }
+          else{
             const diff = (this.baseY - this.y);
             this.vy += diff * springK * dt;
-            this.vy *= (1 - Math.max(0, Math.min(10, dampCoef)) * dt); // clamp for stability
+            this.vy *= (1 - Math.max(0, Math.min(10, dampCoef)) * dt);
           }
         }else{
           let ay=0; if(INPUT[this.index].up) ay-=700; if(INPUT[this.index].down) ay+=700;
@@ -459,16 +479,13 @@
         const minY = Math.max(hh, topPx + topOffset);
         const maxY = Math.min(vh - hh, botPx - hh);
 
-        // Keep within bounds
         this.y = Math.max(Math.min(this.y, maxY), minY);
 
-        // On mobile allow some left drift but keep at least baseX
         const minXDesktop = Math.max(hw, this.baseX);
         const minXMobile  = hw + 8;
         const minX = IS_MOBILE ? minXMobile : minXDesktop;
         this.x = Math.max(Math.min(this.x, vw - hw), minX);
 
-        // roll
         this.roll += (((this.vy)*0.003 + (this.boost>0?0.12:0)) - this.roll)*dt*6;
       }
       draw(ctx){
@@ -481,7 +498,7 @@
       }
     }
 
-    // Obstacles
+    // Obstacles (unchanged)
     const activeObstacleSprites = new Set();
     const imagesLTR = [], imagesRTL = []; let bagLTR=[], bagRTL=[];
     function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
@@ -530,8 +547,7 @@
           : (SPEED.LTR_MIN + Math.random()*(SPEED.LTR_MAX - SPEED.RTL_MIN));
         this.factor = base * levelMul;
 
-        this.motion = null; this.amp=0; this.freq=0; this.phase=0; this.baseY=this.y; this.vy=0;
-        this.valid=true;
+        this.motion = null; this.amp=0; this.freq=0; this.phase=0; this.baseY=this.y; this.vy=0; this.valid=true;
       }
       _enforceBounds(dt){
         const topPx=topLimitPx(), botPx=bottomLimitPx();
@@ -569,11 +585,8 @@
           this.baseY = this.y;
           this.vy = (Math.random()<0.5?1:-1) * (4 + Math.random()*6);
         }
-        if(this.motion === 'sine'){
-          this.y = this.baseY + Math.sin((world.time + this.phase) * Math.PI*2 * this.freq) * this.amp;
-        }else{
-          this.y += this.vy * dt;
-        }
+        if(this.motion === 'sine'){ this.y = this.baseY + Math.sin((world.time + this.phase) * Math.PI*2 * this.freq) * this.amp; }
+        else{ this.y += this.vy * dt; }
         this._enforceBounds(dt);
       }
       off(){ return this.dir==='rtl' ? (this.x < -120) : (this.x > vw + 120); }
@@ -624,8 +637,6 @@
     let last=0, dt=0;
     const LEVEL_SECONDS=(Number.isFinite(CFG.level?.seconds)?CFG.level.seconds:20);
     let level=1, levelElapsed=0, BANNER_DURATION=1.8, levelBannerT=0, levelBannerText='';
-
-    // Motivational messages for levels 2–30
     const LEVEL_MSGS = {
       2:'Nice start!', 3:'Keep it up!', 4:'Smooth moves!', 5:'Great rhythm!', 6:'Wow!',
       7:'You got this!', 8:"You're rolling!", 9:'Strong momentum!', 10:'Cruising!', 11:'Dialed in!',
@@ -650,7 +661,6 @@
       }else{
         if(want2 && players.length===1){ players.push(new Player(1, selectedFor(1))); }
         else if(!want2 && players.length===2){ players.pop(); }
-        // *** FIX: only update mascot if it actually changed
         const n0 = selectedFor(0);
         if(players[0].name !== n0) players[0].setMascot(n0);
         if(players[1]){
@@ -663,7 +673,6 @@
     applyUserScaleToPlayers();
 
     window.addEventListener('storage', ()=>{
-      // Only set if different; setMascot now also guards
       players[0]?.setMascot(selectedFor(0));
       if(players[1]) players[1].setMascot(selectedFor(1));
       const v=parseFloat(localStorage.getItem('mascotScale'));
@@ -720,7 +729,7 @@
         else if(level > 30){ levelBannerSub = "You've arrived…"; }
         else { levelBannerSub = ''; }
 
-        // --- 2P RESPAWN: bring back any dead player at level-up ---
+        // 2P RESPAWN at level-up
         if(players.length > 1){
           for(const p of players){ if(!p.alive) p.revive(); }
           applyUserScaleToPlayers();
@@ -729,7 +738,20 @@
       if(levelBannerT>0){ levelBannerT -= dt; }
     }
 
-    const doho=new Image(); let dohoReady=false; doho.onload=()=>dohoReady=true; doho.src='./Background/Doho.png';
+    // Background image
+    const doho=new Image();
+    doho.src='./Background/Doho.png';
+
+    // ====== Wait for initial assets, then reveal ======
+    let assetsReady = false;
+    (async ()=>{
+      const waits = [ waitImage(doho) ];
+      if(players[0]) waits.push(waitSpritePair(players[0].sprites));
+      if(players[1]) waits.push(waitSpritePair(players[1].sprites));
+      await Promise.all(waits);
+      assetsReady = true;
+      document.body.setAttribute('data-ready','1');
+    })();
 
     function roundRectPath(ctx, x, y, w, h, r){
       ctx.beginPath();
@@ -761,7 +783,6 @@
       ctx.fillText(text, cx, y + h - padY - 2);
       ctx.restore();
     }
-    /* Needed by menu/pause/over screens */
     function drawCenter(title, sub){
       ctx.save();
       const cx = vw/2;
@@ -772,13 +793,12 @@
       ctx.restore();
     }
 
-    // Modern banner with gradient + subtext
     function drawLevelBanner(){
       const w=vw, h=vh;
       const elapsed = BANNER_DURATION - levelBannerT;
       const alpha = elapsed < 0.25 ? (elapsed/0.25) : (elapsed > BANNER_DURATION-0.35 ? (BANNER_DURATION - elapsed)/0.35 : 1);
       const bw = Math.min(680, Math.floor(w*0.72));
-      const bh = 140; // taller to fit subtext
+      const bh = 140;
       const bannerY = (CFG.ui?.levelBannerYPercent ?? 0.18);
       const x = (w-bw)/2, y = h * bannerY;
 
@@ -818,12 +838,14 @@
     }
 
     function draw(){
+      // Gate first render until assets are ready (prevents staggered pop-in)
+      if(!assetsReady){ return; }
+
       const w=vw,h=vh;
       ctx.clearRect(0,0,w,h);
 
       // Background (parallax)
-      const dohoReady = doho.complete && doho.naturalWidth>0;
-      if(dohoReady){
+      if(doho.complete && doho.naturalWidth>0){
         const iw=doho.width, ih=doho.height;
         const topDY = 0, topDH = Math.floor(h*0.42);
         const midDY = Math.floor(h*0.42), midDH = Math.floor(h*0.38) + 2;
@@ -857,7 +879,7 @@
       drawables.sort((a,b)=>(a.y||0)-(b.y||0));
       for(const d of drawables){ d.draw?.(ctx); }
 
-      // HUD (unchanged top-left text)
+      // HUD
       ctx.save();
       ctx.font='16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica';
       ctx.fillStyle='#fff';
@@ -882,7 +904,7 @@
     function loop(t){
       dt=Math.min(0.033, (t-last)/1000 || 0);
       last=t;
-      if(state===STATE.RUN){ world.time += dt; update(); }
+      if(assetsReady && state===STATE.RUN){ world.time += dt; update(); }
       draw();
       requestAnimationFrame(loop);
     }
