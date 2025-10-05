@@ -4,7 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Surf Lime • Settings</title>
+  <!-- Keep your background asset handy -->
   <link rel="prefetch" as="image" href="./Background/Doho.png">
+
   <script>
     // Prefetch the user's selected mascot (Player 1) so it’s ready on Play
     (function(){
@@ -21,45 +23,150 @@
       }catch(_){}
     })();
   </script>
+
   <style>
-    :root{ --bg:#0b1320; --panel:#0f1e35; --ink:#eaf2ff; --accent:#46e38a; --muted:#94a3b8; }
-    *{box-sizing:border-box}
-    html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    .wrap{max-width:1080px;margin:24px auto;padding:0 16px}
-    h1{margin:0 0 12px;font-size:28px}
-    .bar{ display:flex; justify-content:space-between; align-items:center; margin:16px 0 18px;
-      background:#0f233caa; border:1px solid #ffffff22; border-radius:12px; padding:12px 14px; backdrop-filter:blur(6px); }
-    .toggle{ display:flex; align-items:center; gap:8px; }
-    .toggle input{ width:42px; height:22px; }
-    .muted{ color:var(--muted); font-size:12px }
-    .info{
-      margin:16px 0 10px; padding:14px 16px; border-radius:14px;
-      background:#0f1e35; border:1px solid #1e3355;
+    /* ========== Hawaiian / Beach Theme ========== */
+    :root{
+      /* Palette */
+      --sky:   #0a3051;      /* deep sky */
+      --sea:   #0fb3c4;      /* lagoon */
+      --reef:  #18d3b2;      /* reef mint */
+      --sand:  #f8dba5;      /* warm sand */
+      --ink:   #ffffff;      /* text on glass */
+      --muted: #e8f6ffcc;    /* secondary text */
+      --foam:  #c8ffe2;      /* sea foam */
+      --line:  #1d5a70;      /* glass border */
+      --panel: rgba(9, 41, 73, .55); /* sea-glass */
+      --panel-strong: rgba(6, 28, 54, .66);
+      --focus: #ffe08a;      /* sun highlight */
     }
-    .info h2{ margin:0 0 8px; font-size:18px }
-    .info ul{ margin:6px 0 0 18px; padding:0 }
-    .info li{ margin:4px 0 }
-    .psec{ margin-top:14px; }
+
+    *{ box-sizing:border-box }
+    html,body{
+      margin:0; height:100%;
+      color:var(--ink);
+      font:14px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+      background:
+        /* sand wash near bottom */
+        linear-gradient(to bottom, rgba(248,219,165,0) 65%, rgba(248,219,165,.78) 100%),
+        /* subtle sun glow */
+        radial-gradient(1100px 360px at 72% -6%, rgba(255,224,138,.45) 0%, rgba(255,224,138,0) 60%),
+        /* sky→sea banding */
+        linear-gradient(to bottom, var(--sky) 0%, #0d4a6d 28%, var(--sea) 60%, #12cfc9 75%);
+      overflow-y:auto;
+    }
+    /* Shoreline photo as gentle texture layer */
+    body::after{
+      content:""; position:fixed; inset:0;
+      background: url("./Background/Doho.png") bottom center / cover no-repeat;
+      opacity:.22; pointer-events:none; z-index:0;
+    }
+
+    .wrap{ position:relative; z-index:1; max-width:1120px; margin:28px auto; padding:0 16px; }
+    h1{ margin:0 0 14px; font-size:30px; letter-spacing:.2px; text-shadow:0 2px 10px rgba(0,0,0,.25); }
+
+    /* Top bar – glassy with surf-foam edge */
+    .bar{
+      display:flex; justify-content:space-between; align-items:center;
+      margin:16px 0 18px; padding:12px 14px;
+      border-radius:14px; border:1px solid #ffffff2a;
+      background: linear-gradient(180deg, var(--panel), var(--panel-strong));
+      backdrop-filter: blur(8px);
+      box-shadow: 0 10px 30px rgba(0,0,0,.25), inset 0 0 0 1px #ffffff14;
+    }
+    .toggle{ display:flex; align-items:center; gap:10px; }
+    .toggle label{ font-weight:700 }
+    .toggle input{ width:44px; height:24px; accent-color: var(--reef); }
+
+    .muted{ color:var(--muted); font-size:12px }
+
+    /* Sea-glass info cards */
+    .info{
+      margin:16px 0 10px; padding:16px;
+      border-radius:16px;
+      background: linear-gradient(180deg, rgba(10,40,70,.58), rgba(6,24,46,.70));
+      border:1px solid var(--line);
+      box-shadow: 0 12px 28px rgba(0,0,0,.25), inset 0 0 0 1px #ffffff10;
+      backdrop-filter: blur(8px);
+    }
+    .info h2{
+      margin:0 0 10px; font-size:18px;
+      display:flex; align-items:center; gap:10px;
+    }
+    /* little lei / hibiscus accent before some headings */
+    #music h2::before{ content:"🌺"; font-size:18px }
+    #howto h2::before{ content:"🌊"; font-size:18px }
+
+    /* “Play” CTA – sunset gradient */
+    .link-btn{
+      display:inline-flex; align-items:center; justify-content:center;
+      height:42px; padding:0 18px; border-radius:12px;
+      color:#0b1320; text-decoration:none; font-weight:800; letter-spacing:.2px;
+      background: linear-gradient(180deg,#ffd37e,#ff9851);
+      border:1px solid #ffc27e; box-shadow:0 10px 26px rgba(255,162,79,.35);
+    }
+    .link-btn:hover{ filter:brightness(1.04) saturate(1.02) }
+    .link-btn:focus-visible{ outline:2px solid var(--focus); outline-offset:3px }
+
+    /* Section heads + lei chips */
+    .psec{ margin-top:18px; }
     .phead{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-    .chip{ display:inline-block; padding:4px 10px; border-radius:999px; font-weight:700; letter-spacing:.2px;
-      color:#0b1320; background:linear-gradient(180deg,#c8ffe2,#6ff3b1); border:1px solid #0b132033; text-shadow:0 1px 0 #ffffffc2; }
+    .phead h3{ margin:0; font-size:18px; letter-spacing:.2px }
+    .phead h3::before{ content:"🌴"; margin-right:6px }
+
+    .chip{
+      display:inline-block; padding:5px 12px; border-radius:999px; font-weight:800; letter-spacing:.2px;
+      color:#08243d;
+      background: linear-gradient(180deg,#ffd4f0,#ffb789 70%);
+      border:1px solid #00000014; text-shadow:0 1px 0 #ffffffcc;
+      box-shadow: 0 4px 14px rgba(255,158,121,.35);
+    }
+
+    /* Mascot grid → sun-washed tiles */
     .grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(130px,1fr)); gap:12px; margin-top:10px; }
-    .tile{ background:#0f1e35; border:1px solid #1e3355; border-radius:14px; padding:10px; cursor:pointer; text-align:center; }
+    .tile{
+      background: linear-gradient(180deg, rgba(10,40,70,.55), rgba(6,24,46,.68));
+      border:1px solid var(--line); border-radius:16px; padding:10px; cursor:pointer; text-align:center;
+      box-shadow: 0 8px 18px rgba(0,0,0,.25), inset 0 0 0 1px #ffffff0f;
+      transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    }
     .tile img{ width:100%; height:100px; object-fit:contain; display:block; }
     .tname{ margin-top:8px; font-weight:700; color:#eaf2ff; }
-    .tile[aria-selected="true"]{ outline:2px solid #46e38a; box-shadow:0 0 0 3px #46e38a33 inset; }
-    .link-btn{ display:inline-flex; align-items:center; justify-content:center; height:40px; padding:0 14px;
-      border-radius:12px; border:1px solid #ffffff22; color:#fff; text-decoration:none; background:#0f233caa; }
-    .link-btn:hover{ background:#122c4bee }
-  
+    .tile:hover{ transform: translateY(-2px); box-shadow: 0 12px 26px rgba(0,0,0,.28) }
+    .tile[aria-selected="true"]{
+      outline:2px solid var(--reef);
+      box-shadow: 0 0 0 3px rgba(24,211,178,.28) inset, 0 12px 22px rgba(24,211,178,.15);
+      border-color: #2bd9bb;
+    }
+    .tile:focus-visible{ outline:2px solid var(--focus); outline-offset:3px }
+
+    /* Transport controls */
     .transport{ display:flex; align-items:center; gap:10px; margin-top:10px; }
-    .tbtn{ width:42px; height:42px; display:inline-flex; align-items:center; justify-content:center; border-radius:10px;
-      border:1px solid #ffffff22; background:#0f233caa; color:#fff; cursor:pointer; }
-    .tbtn:hover{ background:#122c4bee }
+    .tbtn{
+      width:42px; height:42px; display:inline-flex; align-items:center; justify-content:center; border-radius:10px;
+      border:1px solid #ffffff22;
+      background: linear-gradient(180deg, rgba(10,40,70,.6), rgba(6,24,46,.75));
+      color:#fff; cursor:pointer; box-shadow: 0 6px 16px rgba(0,0,0,.25);
+    }
+    .tbtn:hover{ filter:brightness(1.06) }
+    .tbtn:focus-visible{ outline:2px solid var(--focus); outline-offset:3px }
     .songname{ font-weight:700; margin-left:6px; opacity:.9 }
-    
-</style>
+
+    /* Tiny kbd chips in How-to */
+    #howto kbd{
+      display:inline-block; padding:0 6px; border-radius:6px; border:1px solid #ffffff33;
+      background:rgba(255,255,255,.08); box-shadow: inset 0 0 0 1px #ffffff14;
+      font-size:12px
+    }
+
+    /* Responsive tweak */
+    @media (max-width:640px){
+      h1{ font-size:26px }
+      .link-btn{ height:40px }
+    }
+  </style>
 </head>
+
 <body>
   <div class="wrap">
     <h1>Settings</h1>
@@ -69,16 +176,12 @@
         <label for="twoP"><strong>Two-Player Mode</strong></label>
         <input type="checkbox" id="twoP" />
       </div>
-      <a class="link-btn" href="index.html" style="background:linear-gradient(180deg,#46e38a,#2fbf72); color:#0b1320; font-weight:800; padding:10px 22px; border:1px solid #46e38a88; box-shadow:0 8px 24px rgba(70,227,138,.25)">Play</a>
+      <a class="link-btn" href="index.html" aria-label="Play Surf Lime">Play</a>
     </div>
 
-    <!-- How to play -->
-    
+    <!-- Background Music -->
     <div class="info" id="music">
-      <h2 style="display:flex;align-items:center;gap:10px;margin:0 0 8px">
-        <span>Background Music</span>
-        <span class="songname" id="songName"></span>
-      </h2>
+      <h2><span>Background Music</span><span class="songname" id="songName"></span></h2>
       <div class="transport" id="transport">
         <button class="tbtn" id="prevBtn" title="Previous" aria-label="Previous">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -98,11 +201,10 @@
       </div>
       <div class="muted">Use the arrows to pick a song. Your choice is saved for the game.</div>
     </div>
+
     <div class="info" id="howto">
       <h2>How to play</h2>
-      <ul id="howto-list">
-        <!-- Filled by script with Desktop vs Mobile copy -->
-      </ul>
+      <ul id="howto-list"></ul>
     </div>
 
     <section class="psec" id="p1">
@@ -116,161 +218,160 @@
     </section>
   </div>
 
-<script src="config.js"></script>
-<script>
-  const IS_MOBILE = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
+  <!-- Keep your existing config & logic -->
+  <script src="config.js"></script>
+  <script>
+    const IS_MOBILE = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
 
-  const ALL_MASCOTS = ["Lime","Banana","Strawberry","Grapes","Orange","Pineapple","Watermelon"];
-  try{ localStorage.setItem('availableMascots', JSON.stringify(ALL_MASCOTS)); }catch(e){}
+    const ALL_MASCOTS = ["Lime","Banana","Strawberry","Grapes","Orange","Pineapple","Watermelon"];
+    try{ localStorage.setItem('availableMascots', JSON.stringify(ALL_MASCOTS)); }catch(e){}
 
-  if(!localStorage.getItem('selectedMascotP1')) localStorage.setItem('selectedMascotP1','Lime');
-  if(!localStorage.getItem('selectedMascot'))  localStorage.setItem('selectedMascot','Lime'); // legacy
-  if(!localStorage.getItem('selectedMascotP2')) localStorage.setItem('selectedMascotP2','Banana');
+    if(!localStorage.getItem('selectedMascotP1')) localStorage.setItem('selectedMascotP1','Lime');
+    if(!localStorage.getItem('selectedMascot'))  localStorage.setItem('selectedMascot','Lime'); // legacy
+    if(!localStorage.getItem('selectedMascotP2')) localStorage.setItem('selectedMascotP2','Banana');
 
-  // Two-player toggle (disabled on mobile)
-  const twoP = document.getElementById('twoP');
-  const twoToggle = document.getElementById('twoToggle');
-  const p2Section = document.getElementById('p2');
+    // Two-player toggle (disabled on mobile)
+    const twoP = document.getElementById('twoP');
+    const twoToggle = document.getElementById('twoToggle');
+    const p2Section = document.getElementById('p2');
 
-  if(IS_MOBILE){
-    if(twoToggle) twoToggle.style.display='none';
-    localStorage.setItem('twoPlayerEnabled','false');
-    twoP.checked = false;
-    twoP.disabled = true;
-    p2Section.style.display = 'none';
-  }else{
-    twoP.checked = localStorage.getItem('twoPlayerEnabled') === 'true';
-    twoP.addEventListener('change', ()=> {
-      localStorage.setItem('twoPlayerEnabled', twoP.checked?'true':'false');
+    if(IS_MOBILE){
+      if(twoToggle) twoToggle.style.display='none';
+      localStorage.setItem('twoPlayerEnabled','false');
+      twoP.checked = false;
+      twoP.disabled = true;
+      p2Section.style.display = 'none';
+    }else{
+      twoP.checked = localStorage.getItem('twoPlayerEnabled') === 'true';
+      twoP.addEventListener('change', ()=> {
+        localStorage.setItem('twoPlayerEnabled', twoP.checked?'true':'false');
+        p2Section.style.display = twoP.checked ? '' : 'none';
+      });
       p2Section.style.display = twoP.checked ? '' : 'none';
-    });
-    p2Section.style.display = twoP.checked ? '' : 'none';
-  }
+    }
 
-  // How-to content (desktop vs mobile)
-  const list = document.getElementById('howto-list');
-  const li = (html)=>{ const el=document.createElement('li'); el.innerHTML=html; return el; };
-  if(IS_MOBILE){
-    list.append(
-      li('<strong>Start / Resume:</strong> Tap anywhere.'),
-      li('<strong>Move:</strong> Swipe <kbd>up</kbd>/<kbd>down</kbd>.'),
-      li('<strong>Boost:</strong> Tap &amp; hold anywhere.'),
-      li('<strong>Goal:</strong> Dodge obstacles and survive. Levels advance automatically.'),
-      li('<strong>Levels:</strong> Infinite; difficulty ramps each level.'),
-      li('<strong>Two-player:</strong> Not supported on mobile.')
-    );
-  }else{
-    list.append(
-      li('<strong>Start / Pause / Resume:</strong> Press <kbd>Enter</kbd>.'),
-      li('<strong>Player&nbsp;1:</strong> Move with <kbd>↑</kbd>/<kbd>↓</kbd>, boost with <kbd>→</kbd>.'),
-      li('<strong>Player&nbsp;2 (optional):</strong> <kbd>W</kbd>/<kbd>S</kbd> to move, <kbd>D</kbd> to boost.'),
-      li('<strong>Goal:</strong> Dodge obstacles and survive. Levels advance automatically.'),
-      li('<strong>Levels:</strong> Infinite; difficulty ramps each level.'),
-      li('<strong>Mute:</strong> Press <kbd>M</kbd>.')
-    );
-  }
+    // How-to content (desktop vs mobile)
+    const list = document.getElementById('howto-list');
+    const li = (html)=>{ const el=document.createElement('li'); el.innerHTML=html; return el; };
+    if(IS_MOBILE){
+      list.append(
+        li('<strong>Start / Resume:</strong> Tap anywhere.'),
+        li('<strong>Move:</strong> Swipe <kbd>up</kbd>/<kbd>down</kbd>.'),
+        li('<strong>Boost:</strong> Tap &amp; hold anywhere.'),
+        li('<strong>Goal:</strong> Dodge obstacles and survive. Levels advance automatically.'),
+        li('<strong>Levels:</strong> Infinite; difficulty ramps each level.'),
+        li('<strong>Two-player:</strong> Not supported on mobile.')
+      );
+    }else{
+      list.append(
+        li('<strong>Start / Pause / Resume:</strong> Press <kbd>Enter</kbd>.'),
+        li('<strong>Player&nbsp;1:</strong> Move with <kbd>↑</kbd>/<kbd>↓</kbd>, boost with <kbd>→</kbd>.'),
+        li('<strong>Player&nbsp;2 (optional):</strong> <kbd>W</kbd>/<kbd>S</kbd> to move, <kbd>D</kbd> to boost.'),
+        li('<strong>Goal:</strong> Dodge obstacles and survive. Levels advance automatically.'),
+        li('<strong>Levels:</strong> Infinite; difficulty ramps each level.'),
+        li('<strong>Mute:</strong> Press <kbd>M</kbd>.')
+      );
+    }
 
-  const assetsFor = (name)=> window.SURFLIME_CONFIG?.mascot?.assetsFor(name);
-  function installMascotFallback(img, name, primary){
-    const cands=[];
-    const names=[name, (name==='Pineapple'?'Pinapple':null)].filter(Boolean);
-    for(const nm of names){ const base=`./Mascots/${nm}/${nm}`; cands.push(`${base}Surfer.png`, `${base}Surf.png`); }
-    if(primary && !cands.includes(primary)) cands.unshift(primary);
-    let i=0; img.addEventListener('error', ()=>{ if(++i<cands.length) img.src=cands[i]; });
-    img.src=cands[0];
-  }
+    const assetsFor = (name)=> window.SURFLIME_CONFIG?.mascot?.assetsFor(name);
+    function installMascotFallback(img, name, primary){
+      const cands=[];
+      const names=[name, (name==='Pineapple'?'Pinapple':null)].filter(Boolean);
+      for(const nm of names){ const base=`./Mascots/${nm}/${nm}`; cands.push(`${base}Surfer.png`, `${base}Surf.png`); }
+      if(primary && !cands.includes(primary)) cands.unshift(primary);
+      let i=0; img.addEventListener('error', ()=>{ if(++i<cands.length) img.src=cands[i]; });
+      img.src=cands[0];
+    }
 
-  function makeTile(name, playerIndex){
-    const t = document.createElement('button');
-    t.type='button'; t.className='tile';
-    t.setAttribute('data-name', name); t.setAttribute('aria-selected','false');
-    const img = document.createElement('img');
-    const p = assetsFor?.(name);
-    installMascotFallback(img, name, p?.surf);
-    img.alt = name;
-    const label = document.createElement('div'); label.className='tname'; label.textContent=name;
-    t.appendChild(img); t.appendChild(label);
-    t.addEventListener('click', () => selectMascot(playerIndex, name));
-    return t;
-  }
+    function makeTile(name, playerIndex){
+      const t = document.createElement('button');
+      t.type='button'; t.className='tile';
+      t.setAttribute('data-name', name); t.setAttribute('aria-selected','false');
+      const img = document.createElement('img');
+      const p = assetsFor?.(name);
+      installMascotFallback(img, name, p?.surf);
+      img.alt = name;
+      const label = document.createElement('div'); label.className='tname'; label.textContent=name;
+      t.appendChild(img); t.appendChild(label);
+      t.addEventListener('click', () => selectMascot(playerIndex, name));
+      return t;
+    }
 
-  function selectMascot(idx, name){
-    const key = idx===0 ? 'selectedMascotP1' : 'selectedMascotP2';
-    localStorage.setItem(key, name);
-    if(idx===0) localStorage.setItem('selectedMascot', name); // legacy
+    function selectMascot(idx, name){
+      const key = idx===0 ? 'selectedMascotP1' : 'selectedMascotP2';
+      localStorage.setItem(key, name);
+      if(idx===0) localStorage.setItem('selectedMascot', name); // legacy
+      updateSelections();
+    }
+
+    function updateSelections(){
+      const p1sel = localStorage.getItem('selectedMascotP1') || 'Lime';
+      const p2sel = localStorage.getItem('selectedMascotP2') || 'Banana';
+      document.getElementById('chip1').textContent = p1sel;
+      document.getElementById('chip2').textContent = p2sel;
+      document.querySelectorAll('#grid1 .tile').forEach(el=> el.setAttribute('aria-selected', el.dataset.name===p1sel ? 'true' : 'false'));
+      document.querySelectorAll('#grid2 .tile').forEach(el=> el.setAttribute('aria-selected', el.dataset.name===p2sel ? 'true' : 'false'));
+    }
+
+    const g1 = document.getElementById('grid1'), g2 = document.getElementById('grid2');
+    ["Lime","Banana","Strawberry","Grapes","Orange","Pineapple","Watermelon"].forEach(n => { g1.appendChild(makeTile(n,0)); g2.appendChild(makeTile(n,1)); });
     updateSelections();
-  }
 
-  function updateSelections(){
-    const p1sel = localStorage.getItem('selectedMascotP1') || 'Lime';
-    const p2sel = localStorage.getItem('selectedMascotP2') || 'Banana';
-    document.getElementById('chip1').textContent = p1sel;
-    document.getElementById('chip2').textContent = p2sel;
-    document.querySelectorAll('#grid1 .tile').forEach(el=> el.setAttribute('aria-selected', el.dataset.name===p1sel ? 'true' : 'false'));
-    document.querySelectorAll('#grid2 .tile').forEach(el=> el.setAttribute('aria-selected', el.dataset.name===p2sel ? 'true' : 'false'));
-  }
+    // --- Music transport in Settings ---
+    ;(function(){
+      const CFG = window.SURFLIME_CONFIG || {};
+      const s = CFG.music && CFG.music.supabase;
+      const nameEl = document.getElementById('songName');
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const playBtn = document.getElementById('playBtn');
+      const playIcon= document.getElementById('playIcon');
 
-  const g1 = document.getElementById('grid1'), g2 = document.getElementById('grid2');
-  ["Lime","Banana","Strawberry","Grapes","Orange","Pineapple","Watermelon"].forEach(n => { g1.appendChild(makeTile(n,0)); g2.appendChild(makeTile(n,1)); });
-  updateSelections();
+      const tracks = (s && s.enabled && s.projectRef && s.bucket && Array.isArray(s.files))
+        ? s.files.map(n => ({ name: n, url: `https://${s.projectRef}.supabase.co/storage/v1/object/public/${encodeURIComponent(s.bucket)}/${encodeURIComponent(n)}` }))
+        : [];
 
-  // --- Music transport in Settings ---
-  ;(function(){
-    const CFG = window.SURFLIME_CONFIG || {};
-    const s = CFG.music && CFG.music.supabase;
-    const nameEl = document.getElementById('songName');
-    const prevBtn = document.getElementById('prevBtn');
-    const nextBtn = document.getElementById('nextBtn');
-    const playBtn = document.getElementById('playBtn');
-    const playIcon= document.getElementById('playIcon');
+      let i = 0;
+      if(tracks.length){
+        const saved = localStorage.getItem('musicSelectedUrl');
+        const found = tracks.findIndex(t => t.url === saved);
+        if(found >= 0) i = found;
+      }
 
-    const tracks = (s && s.enabled && s.projectRef && s.bucket && Array.isArray(s.files))
-      ? s.files.map(n => ({ name: n, url: `https://${s.projectRef}.supabase.co/storage/v1/object/public/${encodeURIComponent(s.bucket)}/${encodeURIComponent(n)}` }))
-      : [];
+      let audio = null, playing = false;
 
-    let i = 0;
-    if(tracks.length){
-      const saved = localStorage.getItem('musicSelectedUrl');
-      const found = tracks.findIndex(t => t.url === saved);
-      if(found >= 0) i = found;
-    }
+      function ensureAudio(){
+        if(!audio){ audio = new Audio(); audio.loop=false; audio.preload='auto'; audio.volume=0.6; audio.playsInline=true; }
+        return audio;
+      }
+      function show(){
+        if(!tracks.length){ nameEl.textContent = '(no Supabase songs)'; prevBtn.disabled=nextBtn.disabled=playBtn.disabled=true; return; }
+        nameEl.textContent = tracks[i].name;
+        localStorage.setItem('musicSelectedUrl', tracks[i].url);
+        try{ localStorage.setItem('_musicChangedAt', String(Date.now())); }catch{}
+      }
+      function setPlayIcon(){
+        playIcon.innerHTML = playing
+          ? '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>'
+          : '<polygon points="8 5 19 12 8 19 8 5"></polygon>';
+      }
+      function play(){
+        if(!tracks.length) return;
+        const a = ensureAudio();
+        a.src = tracks[i].url;
+        a.play().then(()=>{ playing=true; setPlayIcon(); }).catch(()=>{});
+      }
+      function pause(){
+        if(audio){ audio.pause(); playing=false; setPlayIcon(); }
+      }
 
-    let audio = null, playing = false;
+      prevBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; i=(i-1+tracks.length)%tracks.length; show(); if(playing) play(); });
+      nextBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; i=(i+1)%tracks.length; show(); if(playing) play(); });
+      playBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; if(!playing) play(); else pause(); });
 
-    function ensureAudio(){
-      if(!audio){ audio = new Audio(); audio.loop=false; audio.preload='auto'; audio.volume=0.6; audio.playsInline=true; }
-      return audio;
-    }
-    function show(){
-      if(!tracks.length){ nameEl.textContent = '(no Supabase songs)'; prevBtn.disabled=nextBtn.disabled=playBtn.disabled=true; return; }
-      nameEl.textContent = tracks[i].name;
-      // Save choice for the game
-      localStorage.setItem('musicSelectedUrl', tracks[i].url);
-      try{ localStorage.setItem('_musicChangedAt', String(Date.now())); }catch{}
-    }
-    function setPlayIcon(){
-      playIcon.innerHTML = playing
-        ? '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>'
-        : '<polygon points="8 5 19 12 8 19 8 5"></polygon>';
-    }
-    function play(){
-      if(!tracks.length) return;
-      const a = ensureAudio();
-      a.src = tracks[i].url;
-      a.play().then(()=>{ playing=true; setPlayIcon(); }).catch(()=>{});
-    }
-    function pause(){
-      if(audio){ audio.pause(); playing=false; setPlayIcon(); }
-    }
-
-    prevBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; i=(i-1+tracks.length)%tracks.length; show(); if(playing) play(); });
-    nextBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; i=(i+1)%tracks.length; show(); if(playing) play(); });
-    playBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; if(!playing) play(); else pause(); });
-
-    // initialize
-    show();
-  })();
-    
-</script>
+      // initialize
+      show();
+    })();
+  </script>
 </body>
 </html>
