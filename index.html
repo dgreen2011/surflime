@@ -2,11 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <!-- Lock pinch/double-tap zoom to avoid iOS magnifier, keep safe-area support -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Surf Lime</title>
+
+  <!-- Preload background for faster first paint -->
   <link rel="preload" as="image" href="./Background/Doho.png" fetchpriority="high">
+
   <script>
-    // Preload selected mascots so they render on first frame
+    // Preload the currently selected mascots so they render on the first frame
     (function(){
       try{
         const preloadMascot = (name) => {
@@ -34,12 +38,20 @@
       }catch(_){}
     })();
   </script>
+
   <style>
     :root { --bg:#0b1320; --ink:#e8f1ff; --accent:#46e38a; }
     *{box-sizing:border-box}
-    html,body{height:100%;margin:0;background:#0b1320;color:var(--ink);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    html,body{
+      height:100%; margin:0; background:#0b1320; color:var(--ink);
+      font:14px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+      /* Stop text highlights / zoom artifacts on iOS */
+      -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color: transparent;
+      /* Prefer click-ish gestures (disables double-tap zoom) */
+      touch-action: manipulation;
+    }
 
-    /* Reveal gate: hide canvas + HUD until assets are ready */
+    /* Gate drawing until assets are ready so everything appears together */
     body[data-ready="0"] canvas{ opacity:0 }
     body[data-ready="1"] canvas{ opacity:1; transition:opacity .22s ease }
     body[data-ready="0"] .icon-row{ opacity:0; pointer-events:none }
@@ -49,13 +61,14 @@
       position:fixed; inset:0; width:100vw; height:100vh; display:block; background:#0a2846;
       touch-action:none; -ms-touch-action:none; user-select:none; -webkit-user-select:none;
     }
+
     .icon-row{ position:fixed; top:12px; right:12px; z-index:20; display:flex; gap:10px; }
     .icon-btn{
       display:inline-flex; align-items:center; justify-content:center;
       min-width:40px; height:40px; padding:0 12px; gap:8px;
       border-radius:12px; border:1px solid #ffffff22; background:#0f233caa;
       backdrop-filter:blur(6px); cursor:pointer; color:#fff; text-decoration:none;
-      font-weight:600; letter-spacing:.2px;
+      font-weight:600; letter-spacing:.2px; touch-action: manipulation;
     }
     .icon-btn:hover{ background:#122c4bee }
     .icon-btn svg{ width:20px; height:20px }
@@ -67,7 +80,7 @@
   <canvas id="game" width="1024" height="576"></canvas>
 
   <div class="icon-row">
-    <!-- Pause button -->
+    <!-- Start/Pause/Resume -->
     <button id="btnPause" class="icon-btn" title="Start" aria-label="Start">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" id="pauseIcon">
@@ -77,11 +90,11 @@
       <span id="pauseLabel">Start</span>
     </button>
 
-    <!-- Mute -->
+    <!-- Mute/Unmute (icon changes clearly) -->
     <button id="btnMute" class="icon-btn" title="Mute" aria-label="Mute">
       <svg id="muteIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <!-- Default to "volume up"; JS swaps based on state -->
+        <!-- default shown; JS swaps -->
         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
         <path d="M15 9a3 3 0 0 1 0 6"></path>
         <path d="M19 7a7 7 0 0 1 0 10"></path>
@@ -107,17 +120,25 @@
     </a>
   </div>
 
+  <!-- Your existing knobs (Supabase tracks, mobile tuning, etc.) -->
   <script src="config.js"></script>
+
   <script>
   (()=>{
+    // Prevent double-tap zoom & gesture zoom globally (helps iOS)
+    document.addEventListener('dblclick', (e)=>{ e.preventDefault(); }, { passive:false, capture:true });
+    document.addEventListener('gesturestart', e=>e.preventDefault(), {passive:false});
+    document.addEventListener('gesturechange', e=>e.preventDefault(), {passive:false});
+    document.addEventListener('gestureend', e=>e.preventDefault(), {passive:false});
+
     const IS_MOBILE = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
 
-    // ====== Small asset-wait helpers (so everything appears together) ======
+    // ===== Helpers to wait for images so UI reveals all-at-once =====
     function waitImage(img, timeout=8000){
       return new Promise(resolve=>{
         if(img && img.complete && img.naturalWidth>0) return resolve(true);
         const done = ()=>{ clearTimeout(t); resolve(true); };
-        const fail = ()=>{ clearTimeout(t); resolve(false); }; // don't block forever
+        const fail = ()=>{ clearTimeout(t); resolve(false); };
         img.addEventListener('load', done, { once:true });
         img.addEventListener('error', fail, { once:true });
         const t = setTimeout(fail, timeout);
@@ -127,7 +148,7 @@
       return Promise.all([ waitImage(sp.surf), waitImage(sp.fall) ]);
     }
 
-    // ----- Pause button -----
+    // ----- Pause/Resume button UI -----
     const pauseBtn = document.getElementById('btnPause');
     const pauseLbl = document.getElementById('pauseLabel');
     function setPauseUI(text){
@@ -145,40 +166,20 @@
       else if(state===STATE.PAUSE) setPauseUI('Resume');
       else setPauseUI('Start');
     }
-    if(pauseBtn){
-      pauseBtn.addEventListener('click', (e)=>{
-        e.preventDefault();
-        if(state===STATE.RUN) pause();
-        else if(state===STATE.PAUSE) resume();
-        else start();
-        updatePauseUI();
-      });
-    }
-
-    // ----- Mute button -----
-    const muteBtn = document.getElementById('btnMute');
-    function updateMuteUI(){
-      if(!muteBtn) return;
-      const label = muted ? 'Unmute' : 'Mute';
-      muteBtn.querySelector('span').textContent = label;
-      muteBtn.title = label;
-      muteBtn.setAttribute('aria-label', label);
-      const icon = muteBtn.querySelector('#muteIcon');
-      if(icon){
-        icon.innerHTML = muted
-          // speaker with X (muted)
-          ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line>'
-          // speaker with waves (unmuted)
-          : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15 9a3 3 0 0 1 0 6"></path><path d="M19 7a7 7 0 0 1 0 10"></path>';
-      }
-    }
+    pauseBtn?.addEventListener('click', (e)=>{
+      e.preventDefault();
+      if(state===STATE.RUN) pause();
+      else if(state===STATE.PAUSE) resume();
+      else start();
+      updatePauseUI();
+    });
 
     // ----- Config helpers -----
     const CFG = window.SURFLIME_CONFIG || { };
     const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
     const lerp=(a,b,t)=>a+(b-a)*t;
 
-    // ----- Supabase music URLs (if enabled) -----
+    // ===== Background music (cross-page persistence) =====
     function getSupabaseMusicUrls(){
       const s = CFG.music && CFG.music.supabase;
       if(!s || !s.enabled || !s.projectRef || !s.bucket || !Array.isArray(s.files)) return null;
@@ -187,18 +188,32 @@
     }
     const TRACKS = getSupabaseMusicUrls() || ['./Music/Surfing.mp3','./Music/Surfing2.mp3','./Music/Surfing3.mp3'];
 
-    // ----- Audio -----
     let music=null, waves=null,
-        // PERSISTED MUTE (default true on mobile if not saved)
         muted = (localStorage.getItem('muted') ?? (IS_MOBILE ? 'true' : 'false')) === 'true',
         audioUnlocked=false;
 
+    // storage keys for cross-page sync with Settings
+    const K = { url:'musicSelectedUrl', pos:'musicPosition', state:'musicPlayState', changed:'_musicChangedAt' };
+
     function initMusic(){
       if(!music){
-        const sel = localStorage.getItem('musicSelectedUrl');
+        const sel = localStorage.getItem(K.url);
         const src = (sel && TRACKS.includes(sel)) ? sel : TRACKS[(Math.random()*TRACKS.length)|0];
         music = new Audio(src);
         music.loop = true; music.preload = 'auto'; music.playsInline = true;
+
+        // Persist position & state so Settings can resume seamlessly
+        const commit = ()=>{
+          try{
+            localStorage.setItem(K.pos, String(music.currentTime||0));
+            localStorage.setItem(K.state, (!music.paused && !muted) ? 'playing' : 'paused');
+            localStorage.setItem(K.changed, String(Date.now()));
+          }catch{}
+        };
+        music.addEventListener('timeupdate', ()=>{ if(!music.duration) return; if(Math.random()<0.35) commit(); });
+        music.addEventListener('play', commit);
+        music.addEventListener('pause', commit);
+        window.addEventListener('beforeunload', commit);
       }
     }
     function initWaves(){
@@ -206,22 +221,40 @@
         waves = new Audio(); waves.loop = true; waves.preload = 'auto'; waves.playsInline = true;
       }
     }
+
     async function unlockAudio(){
       if(audioUnlocked) return;
       audioUnlocked = true;
       initMusic(); initWaves();
+      // iOS requires user gesture before play; do a muted warm-up
       try { music.muted = true; await music.play(); } catch(_) {}
       try {
         for(const p of ['./Sfx/Waves.mp3','./Music/Waves.mp3']){
           try { waves.muted = true; waves.src = p; await waves.play(); break; } catch(_) {}
         }
       } catch(_) {}
+      // After warm-up, apply actual volumes & maybe resume from saved state
       queueMicrotask(()=>{
+        const waveVol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25;
         music.muted = muted; music.volume = muted ? 0 : 0.35;
-        const vol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25;
-        waves.muted = muted; waves.volume = muted ? 0 : vol;
+        waves.muted = muted; waves.volume = muted ? 0 : waveVol;
         updateMuteUI();
+        maybeResumeFromSaved();
       });
+    }
+    document.addEventListener('pointerdown', unlockAudio, { once:true });
+    document.addEventListener('keydown', unlockAudio, { once:true });
+
+    function maybeResumeFromSaved(){
+      const wantPlay = (localStorage.getItem(K.state) || '') === 'playing';
+      const pos = parseFloat(localStorage.getItem(K.pos) || '0') || 0;
+      const url = localStorage.getItem(K.url);
+      initMusic();
+      if(url && TRACKS.includes(url) && music.src !== url){ try{ music.src = url; }catch{} }
+      try{
+        if(Number.isFinite(pos) && music.duration && pos < music.duration){ music.currentTime = Math.max(0,pos); }
+      }catch{}
+      if(wantPlay && !muted){ music.play().catch(()=>{}); }
     }
     function startMusic(){ initMusic(); music.muted = muted; music.volume = muted ? 0 : 0.35; music.play().catch(()=>{}); }
     function startWaves(){
@@ -236,6 +269,22 @@
       const vol = Number.isFinite(CFG.audio?.wavesVolume) ? CFG.audio.wavesVolume : 0.25;
       waves.muted = muted; waves.volume = muted ? 0 : vol; tryNext();
     }
+
+    // Mute button + icon swap
+    const muteBtn = document.getElementById('btnMute');
+    function updateMuteUI(){
+      if(!muteBtn) return;
+      const label = muted ? 'Unmute' : 'Mute';
+      muteBtn.querySelector('span').textContent = label;
+      muteBtn.title = label;
+      muteBtn.setAttribute('aria-label', label);
+      const icon = muteBtn.querySelector('#muteIcon');
+      if(icon){
+        icon.innerHTML = muted
+          ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line>'
+          : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15 9a3 3 0 0 1 0 6"></path><path d="M19 7a7 7 0 0 1 0 10"></path>';
+      }
+    }
     function toggleMute(){
       muted=!muted;
       if(music){ music.muted = muted; music.volume = muted ? 0 : 0.35; }
@@ -246,14 +295,30 @@
       updateMuteUI();
       try{ localStorage.setItem('muted', String(muted)); }catch{}
     }
-    if(muteBtn){
-      muteBtn.addEventListener('click',(e)=>{ e.preventDefault(); toggleMute(); });
-      setTimeout(updateMuteUI, 0);
-    }
-    document.addEventListener('pointerdown', unlockAudio, { once:true });
-    document.addEventListener('keydown', unlockAudio, { once:true });
+    muteBtn?.addEventListener('click',(e)=>{ e.preventDefault(); toggleMute(); });
+    setTimeout(updateMuteUI, 0);
 
-    // ----- Canvas -----
+    // Sync with Settings page while it's open
+    window.addEventListener('storage', ()=>{
+      const url = localStorage.getItem(K.url);
+      if(url && TRACKS.includes(url)){
+        initMusic();
+        if(music.src !== url){
+          const wasPlaying = music && !music.paused && !muted;
+          try{ music.pause(); }catch{}
+          music.src = url;
+          if(wasPlaying){ music.muted = muted; music.volume = muted ? 0 : 0.35; music.play().catch(()=>{}); }
+        }
+      }
+      const st = localStorage.getItem(K.state);
+      if(st === 'playing'){ initMusic(); if(!muted) music.play().catch(()=>{}); }
+      if(st === 'paused'){ try{ music.pause(); }catch{} }
+
+      const v = parseFloat(localStorage.getItem(K.pos)||'0');
+      if(Number.isFinite(v) && music && music.duration){ music.currentTime = Math.min(music.duration-0.2, Math.max(0,v)); }
+    });
+
+    // ===== Canvas + game state =====
     const canvas=document.getElementById('game'); const ctx=canvas.getContext('2d',{alpha:false});
     let vw = canvas.width, vh = canvas.height, dpr=1;
     const world = { time: 0, seaLevel: 0 };
@@ -281,7 +346,7 @@
       return Math.min(vh * 0.999, Math.max(topLimitPx() + 0.02*vh, desiredPx));
     }
 
-    // ----- Scaling helpers -----
+    // Depth & scaling helpers
     function obstacleScaleMul(){
       const desk = Number.isFinite(CFG.obstacle?.scalePercent) ? CFG.obstacle.scalePercent : 100;
       const shrinkPct = Number.isFinite(CFG.mobile?.scaleDownPercent?.obstacle) ? CFG.mobile.scaleDownPercent.obstacle : null;
@@ -307,7 +372,7 @@
       (players||[]).forEach(p=> p.USER_SCALE = s);
     }
 
-    // ----- Players & input -----
+    // Players
     function assetsFor(name){
       if(CFG.mascot?.assetsFor) return CFG.mascot.assetsFor(name);
       const SURFER=new Set(['Banana','Pineapple']);
@@ -315,7 +380,6 @@
       return { surf:`${base}${SURFER.has(name)?'Surfer':'Surf'}.png`, fall:`${base}Fall.png` };
     }
     function twoPlayerEnabled(){ return localStorage.getItem('twoPlayerEnabled') === 'true'; }
-    function setTwoPlayer(val){ localStorage.setItem('twoPlayerEnabled', val ? 'true' : 'false'); }
     function selectedFor(idx){
       const key = (idx===0) ? 'selectedMascotP1' : 'selectedMascotP2';
       let name = localStorage.getItem(key);
@@ -415,7 +479,6 @@
         this.baseX = vw * (this.index===0 ? 0.22 : 0.18);
         this.x = this.baseX;
         if(IS_MOBILE){
-          const CFG = window.SURFLIME_CONFIG||{};
           const offset = Number.isFinite(CFG?.mobile?.holdRise?.baseOffsetFromBottomPx) ? CFG.mobile.holdRise.baseOffsetFromBottomPx : 18;
           const bot = (typeof bottomLimitPx==='function') ? bottomLimitPx() : (canvas.height*0.80);
           this.y = bot - offset;
@@ -498,7 +561,7 @@
       }
     }
 
-    // Obstacles (unchanged)
+    // Obstacles
     const activeObstacleSprites = new Set();
     const imagesLTR = [], imagesRTL = []; let bagLTR=[], bagRTL=[];
     function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } return a; }
@@ -653,8 +716,8 @@
 
     const players=[];
     function applyPlayerSelections(){
-      if(IS_MOBILE){ setTwoPlayer(false); }
-      const want2 = !IS_MOBILE && twoPlayerEnabled();
+      if(IS_MOBILE){ localStorage.setItem('twoPlayerEnabled','false'); }
+      const want2 = !IS_MOBILE && (localStorage.getItem('twoPlayerEnabled') === 'true');
       if(players.length===0){
         players.push(new Player(0, selectedFor(0)));
         if(want2) players.push(new Player(1, selectedFor(1)));
@@ -672,23 +735,12 @@
     applyPlayerSelections();
     applyUserScaleToPlayers();
 
+    // React to storage changes (mascot scale, selection, and music sync)
     window.addEventListener('storage', ()=>{
       players[0]?.setMascot(selectedFor(0));
       if(players[1]) players[1].setMascot(selectedFor(1));
       const v=parseFloat(localStorage.getItem('mascotScale'));
       if(Number.isFinite(v)){ CFG.mascot = CFG.mascot||{}; CFG.mascot.scale=v; applyUserScaleToPlayers(); }
-
-      // Music sync
-      const url = localStorage.getItem('musicSelectedUrl');
-      if(url && TRACKS.includes(url)){
-        initMusic();
-        if(music.src !== url){
-          const wasPlaying = music && !music.paused && !muted;
-          try{ music.pause(); }catch{}
-          music.src = url;
-          if(wasPlaying){ music.muted = muted; music.volume = muted ? 0 : 0.35; music.play().catch(()=>{}); }
-        }
-      }
     });
 
     const obstacles=[]; let spawnTimer=0;
@@ -729,7 +781,7 @@
         else if(level > 30){ levelBannerSub = "You've arrived…"; }
         else { levelBannerSub = ''; }
 
-        // 2P RESPAWN at level-up
+        // 2-player respawn at level-up
         if(players.length > 1){
           for(const p of players){ if(!p.alive) p.revive(); }
           applyUserScaleToPlayers();
@@ -742,17 +794,16 @@
     const doho=new Image();
     doho.src='./Background/Doho.png';
 
-    // ====== Wait for initial assets, then reveal ======
-    let assetsReady = false;
+    // Wait for first assets, then reveal everything together
     (async ()=>{
       const waits = [ waitImage(doho) ];
       if(players[0]) waits.push(waitSpritePair(players[0].sprites));
       if(players[1]) waits.push(waitSpritePair(players[1].sprites));
       await Promise.all(waits);
-      assetsReady = true;
       document.body.setAttribute('data-ready','1');
     })();
 
+    // Simple panel helpers
     function roundRectPath(ctx, x, y, w, h, r){
       ctx.beginPath();
       ctx.moveTo(x+r, y);
@@ -838,9 +889,6 @@
     }
 
     function draw(){
-      // Gate first render until assets are ready (prevents staggered pop-in)
-      if(!assetsReady){ return; }
-
       const w=vw,h=vh;
       ctx.clearRect(0,0,w,h);
 
@@ -886,7 +934,7 @@
       ctx.fillText(`Level: ${level}`,16,24);
       const remain=Math.ceil(Math.max(0,LEVEL_SECONDS-levelElapsed));
       ctx.fillText(`Time: ${String(Math.floor(remain/60)).padStart(2,'0')}:${String(remain%60).padStart(2,'0')}`,16,48);
-      if(!IS_MOBILE && twoPlayerEnabled()){
+      if(!IS_MOBILE && (localStorage.getItem('twoPlayerEnabled') === 'true')){
         ctx.fillStyle='#b9ffd7'; ctx.fillText(`P1: ${players[0]?.name||'-'}`,16,72);
         ctx.fillStyle='#ffe399'; ctx.fillText(`P2: ${players[1]?.name||'-'}`,16,92);
       }else{
@@ -902,9 +950,12 @@
     }
 
     function loop(t){
-      dt=Math.min(0.033, (t-last)/1000 || 0);
+      const MAX_DT = 0.033;
+      dt=Math.min(MAX_DT, (t-last)/1000 || 0);
       last=t;
-      if(assetsReady && state===STATE.RUN){ world.time += dt; update(); }
+      if(document.body.getAttribute('data-ready')==='1' && state===STATE.RUN){
+        world.time += dt; update();
+      }
       draw();
       requestAnimationFrame(loop);
     }
