@@ -6,6 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Surf Lime</title>
 
+  <!-- Favicons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="./Favicons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="16x16"  href="./Favicons/favicon-16x16.png">
+  <link rel="icon" type="image/png" sizes="32x32"  href="./Favicons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="48x48"  href="./Favicons/favicon-48x48.png">
+  <link rel="icon" type="image/png" sizes="180x180" href="./Favicons/favicon-180x180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./Favicons/android-chrome-192x192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="./Favicons/android-chrome-512x512.png">
+  <link rel="shortcut icon" href="./Favicons/favicon.ico">
+  <link rel="manifest" href="./Favicons/site.webmanifest">
+  <meta name="theme-color" content="#0b1320">
+
   <!-- Preload background for faster first paint -->
   <link rel="preload" as="image" href="./Background/Doho.png" fetchpriority="high">
 
@@ -41,12 +53,13 @@
 
   <style>
     :root { --bg:#0b1320; --ink:#e8f1ff; --accent:#46e38a; }
-    *{box-sizing:border-box}
+    *{box-sizing:border-box; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none;}
+    img, a, button, canvas { -webkit-user-drag: none; }
     html,body{
       height:100%; margin:0; background:#0b1320; color:var(--ink);
       font:14px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
       /* Stop text highlights / zoom artifacts on iOS */
-      -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color: transparent;
+      -webkit-tap-highlight-color: transparent;
       /* Prefer click-ish gestures (disables double-tap zoom) */
       touch-action: manipulation;
     }
@@ -59,7 +72,7 @@
 
     canvas{
       position:fixed; inset:0; width:100vw; height:100vh; display:block; background:#0a2846;
-      touch-action:none; -ms-touch-action:none; user-select:none; -webkit-user-select:none;
+      touch-action:none; -ms-touch-action:none;
     }
 
     .icon-row{ position:fixed; top:12px; right:12px; z-index:20; display:flex; gap:10px; }
@@ -125,14 +138,18 @@
 
   <script>
   (()=>{
-    // Prevent double-tap zoom & gesture zoom globally (helps iOS)
-    document.addEventListener('dblclick', (e)=>{ e.preventDefault(); }, { passive:false, capture:true });
-    document.addEventListener('gesturestart', e=>e.preventDefault(), {passive:false});
-    document.addEventListener('gesturechange', e=>e.preventDefault(), {passive:false});
-    document.addEventListener('gestureend', e=>e.preventDefault(), {passive:false});
-
-    // NEW: Block pinch-zoom (multi-touch) and tame double-tap zoom on iOS
+    // --- EXTRA iOS HARDENING: kill magnifier/long-press/selection globally ---
+    document.addEventListener('contextmenu', (e)=> e.preventDefault(), {passive:false}); // long-press menu
+    document.addEventListener('selectstart', (e)=> e.preventDefault(), {passive:false}); // text selection
+    document.addEventListener('dblclick', (e)=> e.preventDefault(), { passive:false, capture:true }); // smart-zoom
+    document.addEventListener('gesturestart',  (e)=> e.preventDefault(), {passive:false});
+    document.addEventListener('gesturechange', (e)=> e.preventDefault(), {passive:false});
+    document.addEventListener('gestureend',    (e)=> e.preventDefault(), {passive:false});
+    // Block pinch during move + double-tap timing guard
     document.addEventListener('touchstart', function(e){
+      if(e.touches && e.touches.length > 1){ e.preventDefault(); }
+    }, { passive:false });
+    document.addEventListener('touchmove', function(e){
       if(e.touches && e.touches.length > 1){ e.preventDefault(); }
     }, { passive:false });
     (function(){
@@ -141,6 +158,8 @@
         const now = Date.now();
         if(now - lastTouchEnd < 300){ e.preventDefault(); }
         lastTouchEnd = now;
+        // Clear any stray selection ranges iOS might have created
+        try{ const sel = window.getSelection && window.getSelection(); if(sel && sel.removeAllRanges) sel.removeAllRanges(); }catch(_){}
       }, { passive:false });
     })();
 
@@ -352,41 +371,45 @@
     addEventListener('blur', ()=>{ if(state===STATE.RUN){ pause(); updatePauseUI(); } });
     resizeDPR();
 
-    function topLimitPx(){   const p=(CFG.limits?.topPercent??0.20);   return vh * Math.min(0.98, Math.max(0, p)); }
+    function topLimitPx(){   const p=(window.SURFLIME_CONFIG?.limits?.topPercent??0.20);   return vh * Math.min(0.98, Math.max(0, p)); }
     function bottomLimitPx(){
-      const p = (CFG.limits?.bottomPercent ?? 0.80);
+      const p = (window.SURFLIME_CONFIG?.limits?.bottomPercent ?? 0.80);
       const desiredPx = vh * Math.min(0.999, Math.max(0, p));
       return Math.min(vh * 0.999, Math.max(topLimitPx() + 0.02*vh, desiredPx));
     }
 
     // Depth & scaling helpers
     function obstacleScaleMul(){
+      const CFG = window.SURFLIME_CONFIG || {};
       const desk = Number.isFinite(CFG.obstacle?.scalePercent) ? CFG.obstacle.scalePercent : 100;
       const shrinkPct = Number.isFinite(CFG.mobile?.scaleDownPercent?.obstacle) ? CFG.mobile.scaleDownPercent.obstacle : null;
       const derivedMobile = Number.isFinite(CFG.obstacle?.scalePercentMobile)
         ? CFG.obstacle.scalePercentMobile
-        : (shrinkPct!=null ? desk * (1 - clamp(shrinkPct,0,100)/100) : desk);
+        : (shrinkPct!=null ? desk * (1 - Math.max(0,Math.min(100,shrinkPct))/100) : desk);
       const p = IS_MOBILE ? derivedMobile : desk;
       return Math.max(0.1, Math.min(3, p / 100));
     }
     function depthMul(kind,y){
+      const CFG = window.SURFLIME_CONFIG || {};
       const top = topLimitPx(), bottom = bottomLimitPx();
       const t = (bottom>top) ? Math.max(0, Math.min(1, (y-top)/(bottom-top))) : 0;
       const d = CFG.depth?.[kind] || { topScale:1, bottomScale:1 };
-      return lerp(d.topScale??1, d.bottomScale??1, t);
+      return (d.topScale??1) + ((d.bottomScale??1) - (d.topScale??1))*t;
     }
     function applyUserScaleToPlayers(){
+      const CFG = window.SURFLIME_CONFIG || {};
       const desktop = Number.isFinite(CFG.mascot?.scale) ? CFG.mascot.scale : 1;
       const shrinkPct = Number.isFinite(CFG.mobile?.scaleDownPercent?.mascot) ? CFG.mobile.scaleDownPercent.mascot : null;
       const derivedMobile = Number.isFinite(CFG.mascot?.scaleMobile)
         ? CFG.mascot.scaleMobile
-        : (shrinkPct!=null ? desktop * (1 - clamp(shrinkPct,0,100)/100) : desktop);
+        : (shrinkPct!=null ? desktop * (1 - Math.max(0,Math.min(100,shrinkPct))/100) : desktop);
       const s = IS_MOBILE ? derivedMobile : desktop;
       (players||[]).forEach(p=> p.USER_SCALE = s);
     }
 
     // Players
     function assetsFor(name){
+      const CFG = window.SURFLIME_CONFIG || {};
       if(CFG.mascot?.assetsFor) return CFG.mascot.assetsFor(name);
       const SURFER=new Set(['Banana','Pineapple']);
       const base=`./Mascots/${name}/${name}`;
@@ -492,7 +515,7 @@
         this.baseX = vw * (this.index===0 ? 0.22 : 0.18);
         this.x = this.baseX;
         if(IS_MOBILE){
-          const offset = Number.isFinite(CFG?.mobile?.holdRise?.baseOffsetFromBottomPx) ? CFG.mobile.holdRise.baseOffsetFromBottomPx : 18;
+          const offset = Number.isFinite(window.SURFLIME_CONFIG?.mobile?.holdRise?.baseOffsetFromBottomPx) ? window.SURFLIME_CONFIG.mobile.holdRise.baseOffsetFromBottomPx : 18;
           const bot = (typeof bottomLimitPx==='function') ? bottomLimitPx() : (canvas.height*0.80);
           this.y = bot - offset;
         } else {
@@ -510,10 +533,11 @@
       update(dt){
         if(!this.alive) return;
 
+        const CFG = window.SURFLIME_CONFIG || {};
         const accel=Number.isFinite(CFG.boost?.accel)?CFG.boost.accel:0.20;
         const decay=Number.isFinite(CFG.boost?.decay)?CFG.boost.decay:0.30;
         const pressed=INPUT[this.index].boost;
-        this.boost=clamp(this.boost + (pressed?accel:-decay)*dt,0,1);
+        this.boost=Math.max(0, Math.min(1, this.boost + (pressed?accel:-decay)*dt));
 
         if(IS_MOBILE){
           const upAccel  = Number.isFinite(CFG.mobile?.motion?.riseAccel)    ? CFG.mobile.motion.riseAccel    : 800;
@@ -528,7 +552,7 @@
         }else{
           let ay=0; if(INPUT[this.index].up) ay-=700; if(INPUT[this.index].down) ay+=700;
           this.vy += ay*dt;
-          const maxV=210; this.vy=clamp(this.vy,-maxV,maxV);
+          const maxV=210; this.vy=Math.max(-maxV, Math.min(maxV, this.vy));
           if(!INPUT[this.index].up && !INPUT[this.index].down){
             if(Math.abs(this.vy) < 800*dt) this.vy=0; else this.vy -= Math.sign(this.vy)*800*dt;
           }
@@ -644,7 +668,7 @@
         if(this.motion === 'sine'){
           const safeSpan = Math.max(8, (maxCenter - minCenter) - 8);
           const maxAmp = Math.max(2, safeSpan * 0.45);
-          if(this.amp > maxAmp) this.amp = lerp(this.amp, maxAmp, Math.min(1, 6*dt));
+          if(this.amp > maxAmp) this.amp = (this.amp*0.7) + (maxAmp*0.3);
           this.baseY = Math.max(minCenter + this.amp, Math.min(maxCenter - this.amp, this.baseY));
           if(this.y <= minCenter+1 || this.y >= maxCenter-1){ this.phase += 1.5*dt; }
         }
@@ -676,7 +700,7 @@
         const oBottom = oTop + oH;
         const oLeft = this.x - oW*0.5;
         const oRight = this.x + oW*0.5;
-        const oLowerFrac = Number.isFinite(CFG.collision?.obstacleLowerZone) ? CFG.collision.obstacleLowerZone : 0.40;
+        const oLowerFrac = Number.isFinite(window.SURFLIME_CONFIG?.collision?.obstacleLowerZone) ? window.SURFLIME_CONFIG.collision.obstacleLowerZone : 0.40;
         const oActiveTop = oTop + oH * (1 - oLowerFrac);
         const oActiveBottom = oBottom;
         const img = player.sprites.surfReady ? player.sprites.surf : null;
@@ -686,7 +710,7 @@
         const pBottom = pTop + pH;
         const pLeft  = player.x - pW*0.5;
         const pRight = player.x + pW*0.5;
-        const pLowerFrac = Number.isFinite(CFG.collision?.limeLowerZone) ? CFG.collision.limeLowerZone : 0.40;
+        const pLowerFrac = Number.isFinite(window.SURFLIME_CONFIG?.collision?.limeLowerZone) ? window.SURFLIME_CONFIG.collision.limeLowerZone : 0.40;
         const pActiveTop = pTop + pH * (1 - pLowerFrac);
         const pActiveBottom = pBottom;
         const shrinkLR = (L, R, W) => { const pad = W * 0.08 * 0.5; return [L + pad, R - pad]; };
@@ -711,7 +735,7 @@
     const STATE={MENU:0,RUN:1,PAUSE:2,OVER:3};
     let state=STATE.MENU;
     let last=0, dt=0;
-    const LEVEL_SECONDS=(Number.isFinite(CFG.level?.seconds)?CFG.level.seconds:20);
+    const LEVEL_SECONDS=(Number.isFinite(window.SURFLIME_CONFIG?.level?.seconds)?window.SURFLIME_CONFIG.level.seconds:20);
     let level=1, levelElapsed=0, BANNER_DURATION=1.8, levelBannerT=0, levelBannerText='';
     const LEVEL_MSGS = {
       2:'Nice start!', 3:'Keep it up!', 4:'Smooth moves!', 5:'Great rhythm!', 6:'Wow!',
@@ -753,7 +777,7 @@
       players[0]?.setMascot(selectedFor(0));
       if(players[1]) players[1].setMascot(selectedFor(1));
       const v=parseFloat(localStorage.getItem('mascotScale'));
-      if(Number.isFinite(v)){ CFG.mascot = CFG.mascot||{}; CFG.mascot.scale=v; applyUserScaleToPlayers(); }
+      if(Number.isFinite(v)){ const CFG = window.SURFLIME_CONFIG = window.SURFLIME_CONFIG || {}; CFG.mascot = CFG.mascot||{}; CFG.mascot.scale=v; applyUserScaleToPlayers(); }
     });
 
     const obstacles=[]; let spawnTimer=0;
@@ -863,7 +887,7 @@
       const alpha = elapsed < 0.25 ? (elapsed/0.25) : (elapsed > BANNER_DURATION-0.35 ? (BANNER_DURATION - elapsed)/0.35 : 1);
       const bw = Math.min(680, Math.floor(w*0.72));
       const bh = 140;
-      const bannerY = (CFG.ui?.levelBannerYPercent ?? 0.18);
+      const bannerY = (window.SURFLIME_CONFIG?.ui?.levelBannerYPercent ?? 0.18);
       const x = (w-bw)/2, y = h * bannerY;
 
       ctx.save();
