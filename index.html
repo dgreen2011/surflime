@@ -352,48 +352,6 @@
 
     // ===== Canvas + game state =====
     const canvas=document.getElementById('game'); const ctx=canvas.getContext('2d',{alpha:false});
-    // === Crisp rendering shim (non-invasive): snap to device pixels to reduce shimmer ===
-    (function enableCrispCanvas(ctx){
-      if (!ctx || ctx.__crispPatched) return; ctx.__crispPatched = true;
-      function dpr(){ return Math.max(1, window.devicePixelRatio || 1); }
-      function snap(n){ return Math.round(n * dpr()) / dpr(); }
-      function snapSize(n){ n = Math.max(1/dpr(), n); return Math.round(n * dpr()) / dpr(); }
-      // Patch translate: when rotation ~0, snap to pixel grid
-      const _translate = ctx.translate.bind(ctx);
-      ctx.translate = function(x, y){
-        try{
-          const t = this.getTransform();
-          const angle = Math.abs(Math.atan2(t.b, t.a));
-          if (angle < 0.001){ x = snap(x); y = snap(y); }
-        }catch(_){}
-        return _translate(x, y);
-      };
-      // Patch drawImage to snap destination coords & sizes
-      const _drawImage = ctx.drawImage.bind(ctx);
-      ctx.drawImage = function(){
-        let args = Array.prototype.slice.call(arguments);
-        try{
-          if (args.length === 3){
-            args[1] = snap(args[1]);
-            args[2] = snap(args[2]);
-          } else if (args.length === 5){
-            args[1] = snap(args[1]);
-            args[2] = snap(args[2]);
-            args[3] = snapSize(args[3]);
-            args[4] = snapSize(args[4]);
-          } else if (args.length === 9){
-            args[5] = snap(args[5]);
-            args[6] = snap(args[6]);
-            args[7] = snapSize(args[7]);
-            args[8] = snapSize(args[8]);
-          }
-        }catch(_){}
-        return _drawImage.apply(this, args);
-      };
-    })(ctx);
-
-   
-
     let vw = canvas.width, vh = canvas.height, dpr=1;
     const world = { time: 0, seaLevel: 0 };
     function resizeDPR(){
@@ -405,7 +363,7 @@
       canvas.height = Math.round(vh * dpr);
       ctx.setTransform(dpr,0,0,dpr,0,0);
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'medium';
+      ctx.imageSmoothingQuality = 'high';
       world.seaLevel = vh * 0.58;
     }
     addEventListener('resize', resizeDPR);
