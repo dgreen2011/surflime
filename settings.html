@@ -2,11 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <!-- Keep the existing responsive behavior -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Surf Lime • Settings</title>
 
-  <!-- Settings page background now uses Settings.png (not Doho.png) -->
+  <!-- ensure wrapper stays hidden until JS finishes boot -->
+  <script>document.documentElement.setAttribute('data-boot','0')</script>
+
+  <!-- Use Settings.png as the page art -->
   <link rel="prefetch" as="image" href="./Background/Settings.png">
 
   <script>
@@ -27,11 +29,11 @@
   </script>
 
   <style>
-    /* ===== Beach Theme Base (no emoji decorations) ===== */
+    /* ========== Theme (subtle, low-glow) ========== */
     :root{
       --sky:#0a3051; --sea:#0fb3c4; --reef:#18d3b2; --sand:#f8dba5;
-      --ink:#fff; --muted:#e8f6ffcc; --line:#1d5a70;
-      --panel: rgba(9, 41, 73, .55); --panel-strong: rgba(6, 28, 54, .66);
+      --ink:#fff; --muted:#cfe8f5; --line:#204a5a;
+      --panel: rgba(9, 41, 73, .45); --panel-strong: rgba(6, 28, 54, .55);
       --focus:#ffe08a;
     }
     *{ box-sizing:border-box }
@@ -40,135 +42,142 @@
       color:var(--ink);
       font:14px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
       background:
-        linear-gradient(to bottom, rgba(248,219,165,0) 65%, rgba(248,219,165,.8) 100%),
-        radial-gradient(1100px 360px at 72% -6%, rgba(255,224,138,.45) 0%, rgba(255,224,138,0) 60%),
+        linear-gradient(to bottom, rgba(248,219,165,0) 65%, rgba(248,219,165,.6) 100%),
         linear-gradient(to bottom, var(--sky) 0%, #0d4a6d 28%, var(--sea) 60%, #12cfc9 75%);
       overflow-y:auto;
       -webkit-tap-highlight-color: transparent;
     }
     body::after{
       content:""; position:fixed; inset:0;
-      /* Settings background now points at Settings.png */
       background: url("./Background/Settings.png") bottom center / cover no-repeat;
-      opacity:.22; pointer-events:none; z-index:0;
+      opacity:.20; pointer-events:none; z-index:0;
     }
-    .wrap{ position:relative; z-index:1; max-width:1120px; margin:28px auto; padding:0 16px; }
-    h1{ margin:0 0 6px; font-size:30px; letter-spacing:.2px; text-shadow:0 2px 10px rgba(0,0,0,.25); }
 
-    /* ===== HERO: front-and-center Play ===== */
+    /* page boot reveal */
+    html[data-boot="0"] .wrap{ opacity:0; transform:translateY(6px); }
+    html[data-boot="1"] .wrap{ opacity:1; transform:none; transition:opacity .22s ease, transform .22s ease; }
+
+    .wrap{ position:relative; z-index:1; max-width:1120px; margin:28px auto; padding:0 16px; }
+    h1{ margin:0 0 6px; font-size:30px; letter-spacing:.2px; }
+
+    /* ========== HERO ========== */
     .hero{
       display:flex; flex-direction:column; align-items:center; justify-content:center;
-      min-height: clamp(180px, 30vh, 320px);
-      margin: 10px 0 6px;
-      text-align:center;
+      min-height: clamp(180px, 26vh, 300px);
+      margin: 10px 0 6px; text-align:center;
     }
     .cta-play{
       display:inline-flex; align-items:center; gap:10px;
-      height:60px; padding:0 28px; border-radius:999px;
+      height:56px; padding:0 24px; border-radius:999px;
       font-weight:900; letter-spacing:.3px; text-decoration:none; color:#0b1320;
       background: linear-gradient(180deg,#ffd37e,#ff9851);
       border:1px solid #ffc27e;
-      box-shadow: 0 12px 26px rgba(255,162,79,.35), 0 2px 0 #ffffffa0 inset;
+      box-shadow: 0 6px 12px rgba(0,0,0,.18);
       transform: translateY(0);
       transition: transform .12s ease, filter .12s ease, box-shadow .12s ease;
     }
-    .cta-play:hover{ filter:brightness(1.04) saturate(1.02); transform: translateY(-1px) }
+    .cta-play:hover{ filter:brightness(1.03) }
     .cta-play:active{ transform: translateY(0) scale(.99) }
     .cta-play:focus-visible{ outline:2px solid var(--focus); outline-offset:4px }
-    .cta-icon{ display:inline-grid; place-items:center; width:28px; height:28px; border-radius:50%;
+    .cta-icon{ display:inline-grid; place-items:center; width:26px; height:26px; border-radius:50%;
       background:#0b1320; color:#fff; font-size:16px; }
+    .cta-hint{ margin-top:10px; font-size:12px; color:var(--muted); user-select:none; }
 
-    .cta-hint{
-      margin-top:10px; font-size:12px; color:var(--muted);
-      user-select:none;
-    }
-
-    /* Slim top utility bar */
+    /* ========== Top Bar (Two-Player switch) ========== */
     .bar{
-      display:flex; justify-content:flex-end; align-items:center;
+      display:flex; justify-content:flex-end; align-items:center; gap:14px;
       margin:10px 0 18px; padding:10px 12px;
-      gap:12px;
-      border-radius:14px; border:1px solid #ffffff2a;
+      border-radius:14px; border:1px solid #ffffff1f;
       background: linear-gradient(180deg, var(--panel), var(--panel-strong));
-      backdrop-filter: blur(8px);
-      box-shadow: 0 10px 30px rgba(0,0,0,.25), inset 0 0 0 1px #ffffff14;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 4px 10px rgba(0,0,0,.18), inset 0 0 0 1px #ffffff10;
     }
     .toggle{ display:flex; align-items:center; gap:10px; }
-    .toggle label{ font-weight:700 }
-    .toggle input{ width:44px; height:24px; accent-color: var(--reef); }
+    .toggle .label{ font-weight:700 }
 
-    .info{
-      margin:16px 0 10px; padding:16px; border-radius:16px;
-      background: linear-gradient(180deg, rgba(10,40,70,.58), rgba(6,24,46,.70));
-      border:1px solid var(--line);
-      box-shadow: 0 12px 28px rgba(0,0,0,.25), inset 0 0 0 1px #ffffff10;
-      backdrop-filter: blur(8px);
+    /* modern switch */
+    .switch{ position:relative; width:48px; height:28px; display:inline-block; }
+    .switch input{ position:absolute; inset:0; opacity:0; }
+    .slider{
+      position:absolute; inset:0; border-radius:999px;
+      background:#284a5a; border:1px solid #3a6477;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,.25);
+      transition: background .15s ease;
     }
-    .info h2{ margin:0 0 10px; font-size:18px; display:flex; align-items:center; gap:10px; }
+    .slider::after{
+      content:""; position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%;
+      background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25);
+      transition: transform .15s ease;
+    }
+    .switch input:checked + .slider{ background:#1aa78d; border-color:#15947d; }
+    .switch input:checked + .slider::after{ transform: translateX(20px); }
+    .switch input:focus-visible + .slider{ outline:2px solid var(--focus); outline-offset:3px; }
+
+    /* ========== Cards ========== */
+    .info{
+      margin:16px 0 10px; padding:16px; border-radius:14px;
+      background: linear-gradient(180deg, rgba(10,40,70,.48), rgba(6,24,46,.60));
+      border:1px solid var(--line);
+      box-shadow: 0 4px 12px rgba(0,0,0,.20), inset 0 0 0 1px #ffffff0d;
+      backdrop-filter: blur(6px);
+    }
+    .info h2{ margin:0 0 8px; font-size:18px; display:flex; align-items:center; gap:10px; }
     .muted{ color:var(--muted); font-size:12px }
 
-    /* ===== Modernized Music Card ===== */
-    .music-card h2{ margin-bottom:6px }
-    .transport{ display:flex; align-items:center; gap:10px; margin-top:10px; }
+    /* Music */
+    .transport{ display:flex; align-items:center; gap:10px; margin-top:8px; }
     .tbtn{
-      width:42px; height:42px; display:inline-flex; align-items:center; justify-content:center; border-radius:10px;
+      width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center; border-radius:10px;
       border:1px solid #ffffff22;
-      background: linear-gradient(180deg, rgba(10,40,70,.6), rgba(6,24,46,.75));
-      color:#fff; cursor:pointer; box-shadow: 0 6px 16px rgba(0,0,0,.25);
+      background: linear-gradient(180deg, rgba(10,40,70,.5), rgba(6,24,46,.62));
+      color:#fff; cursor:pointer; box-shadow: 0 3px 8px rgba(0,0,0,.2);
     }
-    .tbtn:hover{ filter:brightness(1.06) }
+    .tbtn:hover{ filter:brightness(1.05) }
     .tbtn:focus-visible{ outline:2px solid var(--focus); outline-offset:3px }
     .songname{ font-weight:800; margin-left:8px; opacity:.95; letter-spacing:.2px }
     .nowchip{
-      display:inline-block; padding:4px 10px; border-radius:999px; margin-left:auto;
+      display:inline-block; padding:3px 8px; border-radius:999px; margin-left:auto;
       font-weight:800; letter-spacing:.2px; color:#0a223b;
-      background: linear-gradient(180deg,#c6ffe4,#8bf0c2 70%); border:1px solid #00000012;
-      text-shadow:0 1px 0 #ffffffcc;
+      background: #98f0cc; border:1px solid #00000012;
+      text-shadow:none;
     }
-    .seek{
-      display:flex; align-items:center; gap:10px; margin-top:10px;
-    }
+    .seek{ display:flex; align-items:center; gap:10px; margin-top:8px; }
     .seek input[type="range"]{ width:100% }
 
-    /* ===== Mascots grid ===== */
+    /* ========== Mascots ========== */
     .psec{ margin-top:18px; }
-    .phead{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .phead{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
     .phead h3{ margin:0; font-size:18px; letter-spacing:.2px }
+    .inst{ opacity:.9 }
     .chip{
-      display:inline-block; padding:5px 12px; border-radius:999px; font-weight:800; letter-spacing:.2px;
-      color:#08243d; background: linear-gradient(180deg,#ffd4f0,#ffb789 70%); border:1px solid #00000014; text-shadow:0 1px 0 #ffffffcc;
-      box-shadow: 0 4px 14px rgba(255,158,121,.35);
+      margin-left:auto; display:inline-block; padding:4px 10px; border-radius:999px;
+      font-weight:800; letter-spacing:.2px; color:#e3f3ff; background: rgba(255,255,255,.06);
+      border:1px solid #ffffff1a;
     }
     .grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(130px,1fr)); gap:12px; margin-top:10px; }
     .tile{
-      background: linear-gradient(180deg, rgba(10,40,70,.55), rgba(6,24,46,.68));
-      border:1px solid var(--line); border-radius:16px; padding:10px; cursor:pointer; text-align:center;
-      box-shadow: 0 8px 18px rgba(0,0,0,.25), inset 0 0 0 1px #ffffff0f;
-      transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+      background: rgba(10,40,70,.5);
+      border:1px solid var(--line); border-radius:14px; padding:10px; cursor:pointer; text-align:center;
+      box-shadow: 0 2px 6px rgba(0,0,0,.18);
+      transition: transform .12s ease, border-color .12s ease;
     }
     .tile img{ width:100%; height:100px; object-fit:contain; display:block; }
     .tname{ margin-top:8px; font-weight:700; color:#eaf2ff; }
-    .tile:hover{ transform: translateY(-2px); box-shadow: 0 12px 26px rgba(0,0,0,.28) }
+    .tile:hover{ transform: translateY(-1px) }
     .tile[aria-selected="true"]{
       outline:2px solid var(--reef);
-      box-shadow: 0 0 0 3px rgba(24,211,178,.28) inset, 0 12px 22px rgba(24,211,178,.15);
+      box-shadow:none;
       border-color: #2bd9bb;
     }
     .tile:focus-visible{ outline:2px solid var(--focus); outline-offset:3px }
-
-    #howto kbd{
-      display:inline-block; padding:0 6px; border-radius:6px; border:1px solid #ffffff33;
-      background:rgba(255,255,255,.08); box-shadow: inset 0 0 0 1px #ffffff14; font-size:12px
-    }
 
     /* Desktop: force all mascots into a single row (no wrap) */
     @media (min-width: 860px){
       #grid1, #grid2{ grid-auto-flow: column; }
     }
-
     @media (max-width:640px){
       h1{ font-size:26px }
-      .cta-play{ height:56px; padding:0 24px }
+      .cta-play{ height:52px; padding:0 20px }
     }
   </style>
 </head>
@@ -177,7 +186,7 @@
   <div class="wrap">
     <h1>Settings</h1>
 
-    <!-- HERO: front-and-center Play -->
+    <!-- HERO -->
     <div class="hero">
       <a class="cta-play" href="index.html" aria-label="Play Surf Lime">
         <span class="cta-icon" aria-hidden="true">▶</span>
@@ -186,15 +195,18 @@
       <div class="cta-hint">Press <strong>Enter</strong> to start</div>
     </div>
 
-    <!-- Slim utility bar -->
+    <!-- Two-Player (modern switch) -->
     <div class="bar">
       <div class="toggle" id="twoToggle">
-        <label for="twoP"><strong>Two-Player Mode</strong></label>
-        <input type="checkbox" id="twoP" />
+        <span class="label">Two-Player Mode</span>
+        <label class="switch" aria-label="Two-Player Mode">
+          <input type="checkbox" id="twoP" />
+          <span class="slider"></span>
+        </label>
       </div>
     </div>
 
-    <!-- Background Music (modernized) -->
+    <!-- Background Music -->
     <div class="info music-card" id="music">
       <h2>
         <span>Background Music</span>
@@ -228,23 +240,27 @@
       <div class="muted">Pick a track; your choice is saved and continues into (and out of) the game.</div>
     </div>
 
-    <div class="info" id="howto">
-      <h2>How to play</h2>
-      <ul id="howto-list"></ul>
-    </div>
-
+    <!-- Mascots -->
     <section class="psec" id="p1">
-      <div class="phead"><h3>Player 1</h3><span class="chip" id="chip1"></span></div>
+      <div class="phead">
+        <h3>Player 1</h3>
+        <span class="muted inst">Move with ↑/↓, boost with →.</span>
+        <span class="chip" id="chip1"></span>
+      </div>
       <div class="grid" id="grid1"></div>
     </section>
 
     <section class="psec" id="p2">
-      <div class="phead"><h3>Player 2</h3><span class="chip" id="chip2"></span></div>
+      <div class="phead">
+        <h3>Player 2</h3>
+        <span class="muted inst">W/S to move, D to boost.</span>
+        <span class="chip" id="chip2"></span>
+      </div>
       <div class="grid" id="grid2"></div>
     </section>
   </div>
 
-  <!-- Keep your existing config & logic -->
+  <!-- config + logic -->
   <script src="config.js"></script>
   <script>
     const IS_MOBILE = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
@@ -259,7 +275,7 @@
     if(!localStorage.getItem('selectedMascot'))  localStorage.setItem('selectedMascot','Lime'); // legacy
     if(!localStorage.getItem('selectedMascotP2')) localStorage.setItem('selectedMascotP2','Banana');
 
-    // Two-player toggle (disabled on mobile)
+    // Two-player toggle (hidden on mobile)
     const twoP = document.getElementById('twoP');
     const twoToggle = document.getElementById('twoToggle');
     const p2Section = document.getElementById('p2');
@@ -280,29 +296,7 @@
       p2Section.style.display = (twoP && twoP.checked) ? '' : 'none';
     }
 
-    // How-to content (desktop vs mobile)
-    const list = document.getElementById('howto-list');
-    const li = (html)=>{ const el=document.createElement('li'); el.innerHTML=html; return el; };
-    if(IS_MOBILE){
-      list.append(
-        li('<strong>Start / Resume:</strong> Tap anywhere.'),
-        li('<strong>Move:</strong> Swipe <kbd>up</kbd>/<kbd>down</kbd>.'),
-        li('<strong>Boost:</strong> Tap &amp; hold anywhere.'),
-        li('<strong>Goal:</strong> Dodge obstacles and survive. Levels advance automatically.'),
-        li('<strong>Levels:</strong> Infinite; difficulty ramps each level.'),
-        li('<strong>Two-player:</strong> Not supported on mobile.')
-      );
-    }else{
-      list.append(
-        li('<strong>Start / Pause / Resume:</strong> Press <kbd>Enter</kbd>.'),
-        li('<strong>Player&nbsp;1:</strong> Move with <kbd>↑</kbd>/<kbd>↓</kbd>, boost with <kbd>→</kbd>.'),
-        li('<strong>Player&nbsp;2 (optional):</strong> <kbd>W</kbd>/<kbd>S</kbd> to move, <kbd>D</kbd> to boost.'),
-        li('<strong>Goal:</strong> Dodge obstacles and survive. Levels advance automatically.'),
-        li('<strong>Levels:</strong> Infinite; difficulty ramps each level.'),
-        li('<strong>Mute:</strong> Press <kbd>M</kbd>.')
-      );
-    }
-
+    // Mascot tiles
     const assetsFor = (name)=> window.SURFLIME_CONFIG?.mascot?.assetsFor(name);
     function installMascotFallback(img, name, primary){
       const cands=[];
@@ -393,12 +387,12 @@
       function ensureAudio(){
         if(!audio){
           audio = new Audio();
-          audio.loop = true;      // loop music like in-game
+          audio.loop = true;
           audio.preload = 'auto';
           audio.volume  = 0.6;
           audio.playsInline = true;
           audio.addEventListener('timeupdate', ()=>{
-            if(saveTimer++ % 6 === 0){ // ~ couple times a second at most
+            if(saveTimer++ % 6 === 0){
               try{ localStorage.setItem(K.pos, String(audio.currentTime)); localStorage.setItem(K.changed, String(Date.now())); }catch{}
             }
             if(!seekLock && audio.duration){
@@ -429,7 +423,7 @@
           prevBtn.disabled=nextBtn.disabled=playBtn.disabled=true;
           return;
         }
-        nameEl.textContent = pretty(tracks[i].name);
+        nameEl.textContent = pretty(tracks[i].name); // no .wav/.mp3 shown
         try{
           localStorage.setItem(K.url, tracks[i].url);
           localStorage.setItem(K.changed, String(Date.now()));
@@ -448,7 +442,7 @@
         };
       }
 
-      // Seek
+      // Controls
       seek.addEventListener('input', ()=>{
         const a = ensureAudio();
         if(!a.duration) return;
@@ -459,18 +453,11 @@
         try{ localStorage.setItem(K.pos, String(a.currentTime)); localStorage.setItem(K.changed, String(Date.now())); }catch{}
         seekLock = false;
       });
-
-      function play(){
-        if(!tracks.length) return;
-        const a = ensureAudio();
-        a.src = tracks[i].url;
-        a.play().then(()=>{ playing=true; setPlayIcon(); nowChip.hidden=false; }).catch(()=>{});
-      }
+      function play(){ if(!tracks.length) return; const a = ensureAudio(); a.src = tracks[i].url; a.play().then(()=>{ playing=true; setPlayIcon(); nowChip.hidden=false; }).catch(()=>{}); }
       function pause(){ if(audio){ audio.pause(); } }
-
-      prevBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; i=(i-1+tracks.length)%tracks.length; show(); play(); });
-      nextBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; i=(i+1)%tracks.length; show(); play(); });
-      playBtn?.addEventListener('click', ()=>{ if(!tracks.length) return; if(!playing) play(); else pause(); });
+      document.getElementById('prevBtn')?.addEventListener('click', ()=>{ if(!tracks.length) return; i=(i-1+tracks.length)%tracks.length; show(); play(); });
+      document.getElementById('nextBtn')?.addEventListener('click', ()=>{ if(!tracks.length) return; i=(i+1)%tracks.length; show(); play(); });
+      document.getElementById('playBtn')?.addEventListener('click', ()=>{ if(!tracks.length) return; if(!playing) play(); else pause(); });
 
       // Initial paint + resume if we were already playing in-game
       show();
@@ -478,7 +465,7 @@
       if(savedUrl){ const idx = tracks.findIndex(t=>t.url===savedUrl); if(idx>=0){ i = idx; show(); } }
       loadAndMaybeResume(savedUrl);
 
-      // If the game changes track/state, mirror it here.
+      // Mirror changes triggered by the game page
       window.addEventListener('storage', (e)=>{
         if(e.key === K.url){
           const url = localStorage.getItem(K.url);
@@ -503,6 +490,9 @@
         window.location.href = 'index.html';
       }
     });
+
+    // done booting -> reveal the page in one go
+    requestAnimationFrame(()=> document.documentElement.setAttribute('data-boot','1'));
   </script>
 </body>
 </html>
